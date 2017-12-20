@@ -22,7 +22,7 @@ if not os.geteuid() == 0:
 
 def main():
     functions.buildmainarrays(args.targetNetwork)
-    functions.portScan(args.targetNetwork, 8000, settings.nmapGenericSettings)
+    functions.portScan(args.targetNetwork, "8000", settings.nmapGenericSettings)
 
 
 if __name__ == '__main__':
