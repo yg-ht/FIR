@@ -21,4 +21,4 @@ def portScan(targetNetwork, targetPort, nmapGenericSettings):
     nm = nmap.PortScanner()
     nm.scan(targetNetwork, targetPort, nmapGenericSettings)
     for host in nm.all_hosts():
-        print(nm[host].addresses)
+        print(host.addressses)
