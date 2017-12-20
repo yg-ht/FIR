@@ -16,4 +16,4 @@ if not os.geteuid() == 0:
 sys.exit(-1)
 
 functions.buildmainarrays(args.targetNetwork)
-functions.portScan('127.0.0.1', 8000, settings.nmapGenericSettings)
+functions.portScan(args.targetNetwork, 8000, settings.nmapGenericSettings)
