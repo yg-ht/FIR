@@ -15,5 +15,10 @@ if not os.geteuid() == 0:
     print("[!] Must be run as root.")
 sys.exit(-1)
 
-functions.buildmainarrays(args.targetNetwork)
-functions.portScan(args.targetNetwork, 8000, settings.nmapGenericSettings)
+def main():
+    functions.buildmainarrays(args.targetNetwork)
+    functions.portScan(args.targetNetwork, 8000, settings.nmapGenericSettings)
+
+
+if __name__ == '__main__':
+    main()
