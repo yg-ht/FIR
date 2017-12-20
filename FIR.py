@@ -13,7 +13,7 @@ options, args = parser.parse_args()
 
 if not os.geteuid() == 0:
     print("[!] Must be run as root.")
-sys.exit(-1)
+    sys.exit(-1)
 
 def main():
     functions.buildmainarrays(args.targetNetwork)
