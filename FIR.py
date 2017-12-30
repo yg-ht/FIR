@@ -2,8 +2,6 @@
 
 #app modules below
 import settings
-import definitions
-from functions import FastInitialRecon
 
 #python modules below
 import sys
@@ -20,8 +18,9 @@ if not os.geteuid() == 0:
     sys.exit(-1)
 
 def main():
+    from functions import FastInitialRecon
     FIR = FastInitialRecon(args.targetNetwork)
-    #FIR.portScan(args.targetNetwork, "8000", settings.nmapGenericSettings)
+    FIR.portScan(args.targetNetwork, "8000", settings.nmapGenericSettings)
 
 
 if __name__ == '__main__':
