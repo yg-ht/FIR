@@ -6,7 +6,11 @@ class FastInitialRecon:
         import settings
         import definitions
 
-        os.remove(settings.dbFile)
+        try:
+            os.remove(settings.dbFile)
+        except OSError:
+            pass
+
         self.databaseTransaction(settings.dbFile, "CREATE TABLE hosts (id INTEGER PRIMARY KEY, host TEXT)")
         self.databaseTransaction(settings.dbFile, "CREATE TABLE openPorts (id INTEGER PRIMARY KEY, hostID INTEGER, portNum INTEGER, FOREIGN KEY (hostID) REFERENCES hosts(id))")
         self.databaseTransaction(settings.dbFile, "CREATE TABLE findings (id INTEGER PRIMARY KEY, openPortID INTEGER, finding TEXT, FOREIGN KEY (openPortID) REFERENCES openPorts(id))")

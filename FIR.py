@@ -21,7 +21,7 @@ if not os.geteuid() == 0:
 
 def main():
     FIR = FastInitialRecon(args.targetNetwork)
-    FIR.portScan(args.targetNetwork, "8000", settings.nmapGenericSettings)
+    #FIR.portScan(args.targetNetwork, "8000", settings.nmapGenericSettings)
 
 
 if __name__ == '__main__':
