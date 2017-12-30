@@ -1,5 +1,10 @@
+import time
 
 __version__ = 'FIR 0.1a'
+
+startTime = time.time()
+
+dbFile = ('FIR.sqlite')
 
 nmapGenericSettings = '--open -n -Pn -sS -T3'
 
