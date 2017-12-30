@@ -18,7 +18,7 @@ class FastInitialRecon:
             pass
 
         self.databaseTransaction("CREATE TABLE hosts (id INTEGER PRIMARY KEY, host TEXT)")
-        self.databaseTransaction("CREATE TABLE openPorts (id INTEGER PRIMARY KEY, hostID INTEGER, portNum INTEGER, FOREIGN KEY (hostID) REFERENCES hosts(id))")
+        self.databaseTransaction("CREATE TABLE openPorts (id INTEGER PRIMARY KEY, hostID INTEGER, portNum INTEGER, TCP INTEGER, FOREIGN KEY (hostID) REFERENCES hosts(id))")
         self.databaseTransaction("CREATE TABLE findings (id INTEGER PRIMARY KEY, openPortID INTEGER, finding TEXT, FOREIGN KEY (openPortID) REFERENCES openPorts(id))")
         for hostAddr in IPNetwork(targetNetwork):
             self.databaseTransaction("INSERT INTO hosts (host) VALUES(?)", (str(hostAddr),))
@@ -38,13 +38,23 @@ class FastInitialRecon:
         except self.sqlite3.Error as e:
             print(e)
 
-    def portScan(self, targetNetwork, targetPort, nmapGenericSettings):
+    def portScan_TCP(self, targetNetwork, targetPort, nmapGenericSettings):
         nm = self.nmap.PortScanner()
         nm.scan(targetNetwork, targetPort, nmapGenericSettings)
         for IP in nm.all_hosts():
-            print("Port "+targetPort+" found open on host " + IP)
-            hostID = self.databaseTransaction(self.dbFile, "SELECT id FROM hosts WHERE host=?", IP)
-            self.databaseTransaction(self.dbFile, "INSERT INTO openPorts (hostID, portNum) VALUES(?, ?)", (hostID, targetPort))
+            print("TCP Port "+targetPort+" found open on host " + IP)
+            hostIDResult = self.databaseTransaction("SELECT id FROM hosts WHERE host=?", (str(IP),))
+            hostID = hostIDResult[0][0]
+            self.databaseTransaction("INSERT INTO openPorts (hostID, portNum, TCP) VALUES(?, ?, 1)", (hostID, targetPort))
 
-    def storeFinding(self, IP, port, finding):
-        print('blah')
+    def getDiscoveredOpenPorts(self):
+        results = self.databaseTransaction("SELECT hosts.host as IP, openPorts.portNum as Port, openPorts.TCP FROM hosts, openPorts WHERE hosts.id=openPorts.id")
+        return results
+
+    def printDiscoveredOpenPorts(self):
+        results = self.getDiscoveredOpenPorts()
+        for result in results:
+            if (result[2]):
+                print(result[0] + " has open TCP port " + str(result[1]))
+            else:
+                print(result[0] + " has open UDP port " + str(result[1]))

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 #app modules below
 import settings
@@ -20,8 +20,10 @@ if not os.geteuid() == 0:
 def main():
     from functions import FastInitialRecon
     FIR = FastInitialRecon(args.targetNetwork)
-    FIR.portScan(args.targetNetwork, "8000", settings.nmapGenericSettings)
-
+    for targetPort in settings.portsForScanning_TCP:
+        print("Scanning to see if TCP/"+str(targetPort)+" is open on any in-scope IP")
+        FIR.portScan_TCP(args.targetNetwork, str(targetPort), settings.nmapGenericSettings)
+    FIR.printDiscoveredOpenPorts()
 
 if __name__ == '__main__':
     main()
