@@ -1,7 +1,7 @@
 # FIR
 ## Fast Initial Recon
 
-This is a new project designed to automate early enumeration tasks.
+This is a new project designed to automate early enumeration tasks.  It is designed for time-constrained penetration tests.  Needless to say, this isn't exactly subtle - so I wouldn't use it if you are trying to stay under the radar.
 
 Probably not worth your time yet - best to wait for a version that does something ;-)
 
@@ -13,7 +13,7 @@ This project is written for Python2.7, so make sure you have the below dependenc
 - python-nmap
 - python-texttable
 
-On ubuntu-based distributions you can use:
+On ubuntu-based distributions (including Kali) you can use:
 
     apt install python-netaddr python-nmap python-texttable
 
