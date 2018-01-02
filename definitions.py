@@ -1,3 +1,10 @@
+def buildPortTypeArray():
+    portTypes = [
+        [1, 'TCP'],
+        [2, 'UDP'],
+        [3, 'ICMP']
+    ]
+
 def buildReferenceArrays():
     commonTCPPortAssignments = [
         #[port num, description]
