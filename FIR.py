@@ -24,10 +24,11 @@ def main():
         if FIR.settings.debug:
             print("Scanning to see if TCP/"+str(targetPort)+" is open on any in-scope IP")
         FIR.portScan_TCP(args.targetNetwork, str(targetPort), settings.nmapGenericSettings)
+    FIR.smbVersionScan()
     #FIR.printDiscoveredOpenPorts()
-    #FIR.smbVersionScan()
-    #FIR.printFindings()
     FIR.nbtScan()
+    FIR.checkSMBshares()
+    FIR.printFindings()
 
 if __name__ == '__main__':
     main()

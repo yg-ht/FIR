@@ -1057,7 +1057,7 @@ def buildReferenceArrays(self):
         ["6AU", "Microsoft Exchange IMC"],
         ["BEU", "Network Monitor Agent"],
         ["BFU", "Network Monitor Application"],
-        ["00G", "Domain Name"],
+        ["00G", "Domain / Workgroup Name"],
         ["1BU", "Domain Master Browser"],
         ["1CG", "Domain Controllers"],
         ["1DU", "Master Browser"],

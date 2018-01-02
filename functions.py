@@ -105,7 +105,7 @@ class FastInitialRecon:
     def printDiscoveredOpenPorts(self):
         results = self.getDiscoveredOpenPorts()
         discoveredOpenPortsTable = self.Texttable()
-        discoveredOpenPortsTable.add_row(['IP', 'Port Number', 'Port Type'])
+        discoveredOpenPortsTable.header(['IP', 'Port Number', 'Port Type'])
         for result in results:
             if (result[2]):
                 discoveredOpenPortsTable.add_row([result[0], str(result[1]), 'TCP'])
@@ -116,7 +116,8 @@ class FastInitialRecon:
     def printFindings(self):
         results = self.getFindings()
         findingsTable = self.Texttable()
-        findingsTable.add_row(['IP', 'Port Number', 'Port Type', 'Data Source', 'Finding'])
+        findingsTable.set_cols_width([16, 6, 5, 12, 60])
+        findingsTable.header(['IP', 'Port Number', 'Port Type', 'Data Source', 'Finding'])
         for result in results:
             findingsTable.add_row([result[0], str(result[1]), 'TCP', result[3], result[4]])
         print(findingsTable.draw() + "\n")
@@ -156,9 +157,25 @@ class FastInitialRecon:
     def nbtScan(self):
         targets = self.databaseTransaction(("SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=139 AND openPorts.portType = 1 ORDER BY hosts.host"))
         for host in targets:
-            nbtProcess = self.subprocess.Popen(["nbtscan", "-v", "-s ~", host[0]], stdout=self.subprocess.PIPE)
+            nbtProcess = self.subprocess.Popen(["nbtscan", "-v", "-s ~=~=~", host[0]], stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
             nbtScanResult = self.stripUnicode(nbtProcess.communicate()[0])
             for code in self.referenceData['netbiosCodes']:
                 netbiosCodeResult = self.grep(nbtScanResult, code[0])
                 if (netbiosCodeResult):
-                    print(netbiosCodeResult)
+                    if (self.re.search('MAC', netbiosCodeResult)):
+                        netbiosValue = str.replace(netbiosCodeResult.upper(), code[0], code[1]).split("~=~=~")[2]
+                        netbiosType = str.replace(netbiosCodeResult.upper(), code[0], code[1]).split("~=~=~")[1]
+                    else:
+                        netbiosType = str.replace(netbiosCodeResult.upper(), code[0], code[1]).split("~=~=~")[2]
+                        netbiosValue = str.replace(netbiosCodeResult.upper(), code[0], code[1]).split("~=~=~")[1]
+                    self.storeFinding(host[0], 139, 1, 'NBTscan', netbiosType + ": " + netbiosValue)
+
+    def checkSMBshares(self):
+        targets = self.databaseTransaction(
+            "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND (openPorts.portNum=445 OR openPorts.portNum=139) AND openPorts.portType = 1 ORDER BY hosts.host")
+        for host in targets:
+            smbSharesProcess = self.subprocess.Popen(["smbclient", "-N", "-L", host[0]], stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
+            smbSharesScanResult = self.re.sub('\t', '', self.re.sub(' +',' ',self.grep(self.stripUnicode(smbSharesProcess.communicate()[0]), 'Disk')))
+            smbSharesScanResultValue = smbSharesScanResult.split(' ')[0]
+            smbSharesScanResultType = smbSharesScanResult.split(' ')[1]
+            self.storeFinding(host[0], 445, 1, 'SMB Shares scanner', 'Non-default share.\nNamed:\t' + smbSharesScanResultValue + '\nType:\t' + smbSharesScanResultType)
