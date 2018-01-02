@@ -27,8 +27,8 @@ This script should auto-detect MSFRPC running status and start if required, othe
 
 To make this a minimum viable product for initial noisey recon the following must be in place:
 
-- take user input for usernames, hostnames, domain names etc
 - multi-thread prep for the below:
+- take user input for usernames, hostnames, domain names etc
 - nbtscan
 - DNS enumeration
 - null session enumeration
@@ -36,7 +36,6 @@ To make this a minimum viable product for initial noisey recon the following mus
 - smbdisco
 - smtp enum
 - nmap all remaining ports
-- display table of results
 
 ## Thanks and acknowledgments
 

@@ -1,12 +1,13 @@
-def buildPortTypeArray():
-    portTypes = [
+def buildReferenceArrays(self):
+    referenceData = dict()
+
+    referenceData['portTypes'] = [
         [1, 'TCP'],
         [2, 'UDP'],
         [3, 'ICMP']
     ]
 
-def buildReferenceArrays():
-    commonTCPPortAssignments = [
+    referenceData['commonTCPPortAssignments'] = [
         #[port num, description]
         [5, "Remote job entry"],
         [7, "Echo Protocol"],
@@ -1031,8 +1032,7 @@ def buildReferenceArrays():
         [47808, "BACnet Building Automation and Control Networks (4780810 = BAC016)"]
     ]
 
-    netbiosCodes = [
-        #[code, description]
+    referenceData['netbiosCodes'] = [
         ["00U", "Workstation Service"],
         ["01U", "Messenger Service"],
         ["01G", "Master Browser"],
@@ -1057,12 +1057,13 @@ def buildReferenceArrays():
         ["6AU", "Microsoft Exchange IMC"],
         ["BEU", "Network Monitor Agent"],
         ["BFU", "Network Monitor Application"],
-        ["03U", "Messenger Service"],
         ["00G", "Domain Name"],
         ["1BU", "Domain Master Browser"],
         ["1CG", "Domain Controllers"],
         ["1DU", "Master Browser"],
         ["1EG", "Browser Service Elections"],
         ["1CG", "IIS"],
-        ["00U", "IIS"]
+        ["MAC", "MAC address"]
     ]
+
+    return referenceData

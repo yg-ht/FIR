@@ -14,6 +14,7 @@ class FastInitialRecon:
     from time import sleep
     import psutil
     import re
+    import subprocess
 
     #custom modules
     import definitions
@@ -47,6 +48,7 @@ class FastInitialRecon:
         for hostAddr in self.IPNetwork(targetNetwork):
             self.databaseTransaction("INSERT INTO hosts (host) VALUES(?)", (str(hostAddr),))
         # / init database
+        self.referenceData = self.definitions.buildReferenceArrays(self)
 
     def checkMSFRPCrunning(self):
         msfRPCRunning = False
@@ -128,23 +130,35 @@ class FastInitialRecon:
             if (not msfResult['busy']):
                 msfReady = True
         if (printOutput):
-            # The below filter / lambda functions are required to filter out unicode chars, as the "color false" doesn't apply properly
-            print(filter(lambda x: x in self.string.printable, msfResult['data']))
-            #print(filter(lambda x: x in self.string.printable, msfResult['prompt']))
+            print(self.stripUnicode(msfResult['data']))
+            print(self.stripUnicode(msfResult['prompt']))
         else:
             return msfResult
 
+    def stripUnicode(self, data):
+        return(filter(lambda x: x in self.string.printable, data))
+
     def grep(self, haystack, needle):
         for line in str.splitlines(haystack):
-            if (self.re.search(needle, line)):
+            if (self.re.search(needle, line, self.re.IGNORECASE)):
                 return(line)
 
     def smbVersionScan(self):
         self.executeMSFcommand(self.msfConsole, 'use auxiliary/scanner/smb/smb_version')
-        targets = self.databaseTransaction("SELECT DISTINCT hosts.host as IP FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND (openPorts.portNum=445 OR openPorts.portNum=139)AND openPorts.portType = 1 ORDER BY hosts.host")
+        targets = self.databaseTransaction("SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND (openPorts.portNum=445 OR openPorts.portNum=139) AND openPorts.portType = 1 ORDER BY hosts.host")
         for host in targets:
             self.executeMSFcommand(self.msfConsole, 'set RHOSTS '+host[0]+'/32')
             msfResult = self.executeMSFcommand(self.msfConsole, 'run')
             portNum = int(self.grep(msfResult['data'], host[0]).split("Host is running ")[0].split(":")[1].split(" ")[0])
             msfFinding = self.grep(msfResult['data'], host[0]).split("Host is running ")[1]
             self.storeFinding(host[0],portNum,1,"SMB Version Scan",msfFinding)
+
+    def nbtScan(self):
+        targets = self.databaseTransaction(("SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=139 AND openPorts.portType = 1 ORDER BY hosts.host"))
+        for host in targets:
+            nbtProcess = self.subprocess.Popen(["nbtscan", "-v", "-s ~", host[0]], stdout=self.subprocess.PIPE)
+            nbtScanResult = self.stripUnicode(nbtProcess.communicate()[0])
+            for code in self.referenceData['netbiosCodes']:
+                netbiosCodeResult = self.grep(nbtScanResult, code[0])
+                if (netbiosCodeResult):
+                    print(netbiosCodeResult)
