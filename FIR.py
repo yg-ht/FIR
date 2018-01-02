@@ -21,9 +21,11 @@ def main():
     from functions import FastInitialRecon
     FIR = FastInitialRecon(args.targetNetwork)
     for targetPort in settings.portsForScanning_TCP:
-        print("Scanning to see if TCP/"+str(targetPort)+" is open on any in-scope IP")
+        if FIR.settings.debug:
+            print("Scanning to see if TCP/"+str(targetPort)+" is open on any in-scope IP")
         FIR.portScan_TCP(args.targetNetwork, str(targetPort), settings.nmapGenericSettings)
     FIR.printDiscoveredOpenPorts()
+    FIR.smbVersionScan()
 
 if __name__ == '__main__':
     main()
