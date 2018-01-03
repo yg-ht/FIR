@@ -140,9 +140,22 @@ class FastInitialRecon:
         return(filter(lambda x: x in self.string.printable, data))
 
     def grep(self, haystack, needle):
+        lines = ''
         for line in str.splitlines(haystack):
             if (self.re.search(needle, line, self.re.IGNORECASE)):
-                return(line)
+                lines = lines + line + "\n"
+        if (lines):
+            lines = self.re.sub("\n$", '', lines)
+        return lines
+
+    def grepv(self, haystack, needle):
+        lines = ''
+        for line in str.splitlines(haystack):
+            if (not self.re.search(needle, line, self.re.IGNORECASE)):
+                lines = lines + line + "\n"
+        if (lines):
+            lines = self.re.sub("\n$", '', lines)
+        return lines
 
     def smbVersionScan(self):
         self.executeMSFcommand(self.msfConsole, 'use auxiliary/scanner/smb/smb_version')
@@ -178,4 +191,26 @@ class FastInitialRecon:
             smbSharesScanResult = self.re.sub('\t', '', self.re.sub(' +',' ',self.grep(self.stripUnicode(smbSharesProcess.communicate()[0]), 'Disk')))
             smbSharesScanResultValue = smbSharesScanResult.split(' ')[0]
             smbSharesScanResultType = smbSharesScanResult.split(' ')[1]
-            self.storeFinding(host[0], 445, 1, 'SMB Shares scanner', 'Non-default share.\nNamed:\t' + smbSharesScanResultValue + '\nType:\t' + smbSharesScanResultType)
+            self.storeFinding(host[0], 445, 1, 'SMB share discovery', 'Non-default share.\nNamed:\t' + smbSharesScanResultValue + '\nType:\t' + smbSharesScanResultType)
+
+    def smbUsersScan(self):
+        self.executeMSFcommand(self.msfConsole, 'use auxiliary/scanner/smb/smb_enumusers')
+        targets = self.databaseTransaction("SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND (openPorts.portNum=445 OR openPorts.portNum=139) AND openPorts.portType = 1 ORDER BY hosts.host")
+        for host in targets:
+            self.executeMSFcommand(self.msfConsole, 'set RHOSTS '+host[0]+'/32')
+            msfResult = self.executeMSFcommand(self.msfConsole, 'run')
+            portNum = int(self.grep(msfResult['data'], host[0]).split(" - ")[0].split(":")[1].split(" ")[0])
+            msfFindingDetail = self.grep(msfResult['data'], host[0]).split(" [ ")[1].split(" ]")[0]
+            if (msfFindingDetail):
+                msfFinding = 'Users found: ' + msfFindingDetail
+            else:
+                msfFinding = 'No users found on host (probably no permissions)'
+            self.storeFinding(host[0],portNum,1,"SMB user discovery",msfFinding)
+
+    def checkSMBshareAccess(self):
+        targets = self.databaseTransaction(
+            "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND (openPorts.portNum=445 OR openPorts.portNum=139) AND openPorts.portType = 1 ORDER BY hosts.host")
+        for host in targets:
+            smbSharesProcess = self.subprocess.Popen(["smbmap", "-H", host[0]], stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
+            smbSharesScanResult = self.re.sub("\n\t", "\n", self.re.sub("^\t", '', self.re.sub(' +',' ',self.grepv(self.grepv(self.grepv(self.stripUnicode(smbSharesProcess.communicate()[0]), host[0]), 'Finding open SMB ports....'), '-----------'))))
+            self.storeFinding(host[0], 445, 1, 'SMB share access checker', 'The following share accesses were found:\n' + smbSharesScanResult)

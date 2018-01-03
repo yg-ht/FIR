@@ -29,11 +29,10 @@ To make this a minimum viable product for initial noisey recon the following mus
 
 - multi-thread prep for the below:
 - take user input for usernames, hostnames, domain names etc
-- nbtscan
 - DNS enumeration
 - null session enumeration
-- enum4linux
-- smbdisco
+- enum4linux esq stuff
+- smb share read / write perms discovery
 - smtp enum
 - nmap all remaining ports
 
