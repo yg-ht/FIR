@@ -18,4 +18,3 @@ nmapGenericSettingsUDP = '--open -n -Pn -sU -T3'
 portsForScanning_TCP = [139,445] # limiting it to this port for initial testing as can just spin up a listening service somewhere
 #portsForScanning_UDP = [53,123,135,137,138,161,162]
 portsForScanning_UDP = [53] # limiting it to this port for initial testing as can just spin up a listening service somewhere
-commonUsernames = ["administrator", "admin", "root", "user", "guest"]

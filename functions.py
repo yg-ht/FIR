@@ -51,6 +51,11 @@ class FastInitialRecon:
             self.os.remove(self.settings.dbFile)
         except OSError:
             pass
+        self.databaseTransaction("CREATE TABLE usernames (id INTEGER PRIMARY KEY, username TEXT)")
+        for username in self.referenceData['commonUsernames']:
+            self.databaseTransaction("INSERT INTO usernames (username) VALUES(?)", (str(username),))
+        self.databaseTransaction("CREATE TABLE hostnames (id INTEGER PRIMARY KEY, hostname TEXT)")
+        self.databaseTransaction("CREATE TABLE domains (id INTEGER PRIMARY KEY, domain TEXT)")
         self.databaseTransaction("CREATE TABLE hosts (id INTEGER PRIMARY KEY, host TEXT)")
         self.databaseTransaction("CREATE TABLE openPorts (id INTEGER PRIMARY KEY, hostID INTEGER, portNum INTEGER, portType INTEGER, FOREIGN KEY (hostID) REFERENCES hosts(id))")
         self.databaseTransaction("CREATE TABLE findings (id INTEGER PRIMARY KEY, openPortID INTEGER, dataSource TEXT, finding TEXT, FOREIGN KEY (openPortID) REFERENCES openPorts(id))")
@@ -119,16 +124,21 @@ class FastInitialRecon:
         menuActions = {
             'main_menu': self.printMainMenu,
             '01': self.runDefaultTools,                 # run default tools
-            '02': self.printRunMenu,                    # print "run ..." menu
+            '02': self.printRunMenu,                    # print the "run ..." menu
             '03': self.printDiscoveredOpenPorts,        # show discovered ports
             '04': self.printFindings,                   # show findings
             '05': self.printFindingsForTarget,          # show findings on specified target
+            '06': self.printDataMenu,                   # print the "data" menu
             '0C': self.clearScreen,                     # clear the screen
             '0Q': self.shutdown,                        # quit
             '11': self.nbtScan,                         # run NBTscanner
             '12': self.smbVersionScan,                  # run SMB version scanner
             '1M': self.printMainMenu,                   # return to main menu
-            '1C': self.clearScreen                      # clear the screen
+            '21': self.printCurrentData,                # show existing data in system
+            '22': self.addUsername,                     # add usernames to system
+            '23': self.addHostname,                     # add hostnames to system
+            '24': self.addDomain,                       # add domain names to system
+            '2M': self.printMainMenu,                   # return to main menu
         }
         return menuActions
 
@@ -143,6 +153,35 @@ class FastInitialRecon:
             except KeyError:
                 print "Invalid selection, please try again.\n"
                 self.menuActions['main_menu']()
+
+    def printCurrentData(self):
+        print ("The following data is currently in the system")
+        print ("Usernames:")
+        usernameResults = self.databaseTransaction("SELECT username FROM usernames ORDER BY username")
+        if (usernameResults):
+            for username in usernameResults:
+                print(" - " + username[0])
+        print("\nHostnames:")
+        hostnameResults = self.databaseTransaction("SELECT hostname FROM hostnames ORDER BY hostname")
+        if (hostnameResults):
+            for hostname in hostnameResults:
+                print(" - " + hostname[0])
+        print("\nDomains:")
+        domainResults = self.databaseTransaction("SELECT domain FROM domains ORDER BY domain")
+        if (domainResults):
+            for domain in domainResults:
+                print(" - " + domain[0])
+        print("\n")
+
+    def printDataMenu(self):
+        self.printCurrentData()
+        print ('Select your action:')
+        print ('  1 - Add usernames')
+        print ('  2 - Add hostnames')
+        print ('  3 - Add domains')
+        print ('  M - Main Menu')
+        choice = self.readchar.readkey()
+        self.execMenu('2' + choice.upper())
 
     def printDiscoveredOpenPorts(self):
         results = self.getDiscoveredOpenPorts()
@@ -178,7 +217,8 @@ class FastInitialRecon:
         print ('  3 - Show discovered ports on all targeted systems')
         print ('  4 - Show findings on all targeted systems')
         print ('  5 - Show findings on specified target')
-        print ('  C - Clear screen')
+        print ('  6 - Add data (usernames etc)')
+        print ('  C - Clear Screen')
         print ('  Q - Quit')
         print (' >> ')
         choice = self.readchar.readkey()
@@ -191,12 +231,32 @@ class FastInitialRecon:
         print ('  3 - ...')
         print ('  4 - ...')
         print ('  M - Main Menu')
-        print ('  C - Clear screen')
         print (' >> ')
         choice = self.readchar.readkey()
         self.execMenu('1' + choice.upper())
 
 ### secondary functionality ###
+
+    def addDomain(self):
+        print ("Add domain")
+        print ("Either add a single record and press enter, or, separate multiple records with commas (no spaces)")
+        domains = raw_input("Domain(s): ")
+        for domain in domains.split(","):
+            self.databaseTransaction("INSERT INTO domains (domain) VALUES(?)", (str(domain),))
+
+    def addHostname(self):
+        print ("Add hostname")
+        print ("Either add a single record and press enter, or, separate multiple records with commas (no spaces)")
+        hostnames = raw_input("Hostname(s): ")
+        for hostname in hostnames.split(","):
+            self.databaseTransaction("INSERT INTO hostnames (hostname) VALUES(?)", (str(hostname),))
+
+    def addUsername(self):
+        print ("Add username")
+        print ("Either add a single record and press enter, or, separate multiple records with commas (no spaces)")
+        usernames = raw_input("Username(s): ")
+        for username in usernames.split(","):
+            self.databaseTransaction("INSERT INTO usernames (username) VALUES(?)", (str(username),))
 
     def getDiscoveredOpenPorts(self):
         results = self.databaseTransaction("SELECT hosts.host, openPorts.portNum, openPorts.portType FROM hosts, openPorts WHERE hosts.id=openPorts.hostID ORDER BY hosts.host, openPorts.portNum")

@@ -1066,4 +1066,6 @@ def buildReferenceArrays(self):
         ["MAC", "                MAC address"]
     ]
 
+    referenceData['commonUsernames'] = ["administrator", "admin", "root", "user", "guest"]
+
     return referenceData

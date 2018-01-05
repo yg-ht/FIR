@@ -30,11 +30,22 @@ This script should auto-detect MSFRPC running status and start if required, othe
 
 To make this a minimum viable product for initial noisey recon the following must be in place:
 
-- take user input for usernames, hostnames, domain names etc
 - DNS enumeration
+- AXFR
+- SNMP common comunity string detection
+- SSH version detection
 - null session enumeration
+- pulling password policies
+- identifying ms08-067 vulnerable machines
 - enum4linux esq stuff
-- smtp enum
+- smtp enum of users
+- ruser
+- rwho
+- finger
+- ftp anonymous login checking
+- ftp anonymous access
+- identify IIS / Apache versions (and associated exploitDB data)
+- identify MSSQL with default creds
 - multi-thread prep for the below:
 - nmap all remaining ports
 
