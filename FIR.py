@@ -7,6 +7,7 @@ import settings
 import sys
 import os
 import argparse
+#import asyncio
 
 parser = argparse.ArgumentParser(description='FIR - Fast Initial Recon, a tool to extract details about a given network in a way that is efficient for penetration testing')
 parser.add_argument("-N", "--targetNetwork", action="store", default="127.0.0.1/32", help="Specify the target network in CIDR notaton.", dest="targetNetwork")
@@ -17,20 +18,12 @@ if not os.geteuid() == 0:
     print("[!] Must be run as root.")
     sys.exit(-1)
 
+def quit(self):
+    self.sys.exit(0)
+
 def main():
     from functions import FastInitialRecon
     FIR = FastInitialRecon(args.targetNetwork)
-    for targetPort in settings.portsForScanning_TCP:
-        if FIR.settings.debug:
-            print("Scanning to see if TCP/"+str(targetPort)+" is open on any in-scope IP")
-        FIR.portScan_TCP(args.targetNetwork, str(targetPort), settings.nmapGenericSettings)
-    FIR.nbtScan()
-    FIR.smbVersionScan()
-    FIR.smbUsersScan()
-    FIR.checkSMBshares()
-    FIR.checkSMBshareAccess()
-    #FIR.printDiscoveredOpenPorts()
-    FIR.printFindings()
 
 if __name__ == '__main__':
     main()

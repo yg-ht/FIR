@@ -12,10 +12,13 @@ This project is written for Python2.7, so make sure you have the below dependenc
 - python-netaddr
 - python-nmap
 - python-texttable
+- python readchar
 
 On ubuntu-based distributions (including Kali) you can use:
 
     apt install python-netaddr python-nmap python-texttable
+    pip install readchar
+    #pip install asyncio
 
 You will also need to have Metasploit in good working order as this script takes advantage of the MSFRPCd.
 
