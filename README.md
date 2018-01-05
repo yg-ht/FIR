@@ -30,17 +30,17 @@ This script should auto-detect MSFRPC running status and start if required, othe
 
 To make this a minimum viable product for initial noisey recon the following must be in place:
 
-- multi-thread prep for the below:
 - take user input for usernames, hostnames, domain names etc
 - DNS enumeration
 - null session enumeration
 - enum4linux esq stuff
-- smb share read / write perms discovery
 - smtp enum
+- multi-thread prep for the below:
 - nmap all remaining ports
 
 ## Thanks and acknowledgments
 
-The following people and code repositories have been invaluable in making this project:
+Thanks must go to the following people and code repositories as they have been invaluable in making this project:
 
+- many many friends, who I'm sure want to remain nameless
 - https://github.com/allfro/pymetasploit
