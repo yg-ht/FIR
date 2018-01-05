@@ -132,6 +132,7 @@ class FastInitialRecon:
             self.menuActions['main_menu']()
         else:
             try:
+                self.clearScreen()
                 self.menuActions[choice]()
                 self.printMenu()
             except KeyError:
