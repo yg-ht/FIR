@@ -115,7 +115,7 @@ class FastInitialRecon:
         return lines
 
     def shutdown(self):
-        print ('Quiting threads now...')
+        print ('Quiting now...')
         self.sys.exit(0)
 
 ### Output functionality ###
@@ -127,17 +127,17 @@ class FastInitialRecon:
             '02': self.printRunMenu,                    # print the "run ..." menu
             '03': self.printDiscoveredOpenPorts,        # show discovered ports
             '04': self.printFindings,                   # show findings
-            '05': self.printFindingsForTarget,          # show findings on specified target
+            '05': self.printDetailsOfTarget,            # show findings on specified target
             '06': self.printDataMenu,                   # print the "data" menu
             '0C': self.clearScreen,                     # clear the screen
             '0Q': self.shutdown,                        # quit
             '11': self.nbtScan,                         # run NBTscanner
             '12': self.smbVersionScan,                  # run SMB version scanner
             '1M': self.printMainMenu,                   # return to main menu
-            '21': self.printCurrentData,                # show existing data in system
-            '22': self.addUsername,                     # add usernames to system
-            '23': self.addHostname,                     # add hostnames to system
-            '24': self.addDomain,                       # add domain names to system
+            '20': self.printCurrentData,                # show existing data in system
+            '21': self.addUsername,                     # add usernames to system
+            '22': self.addHostname,                     # add hostnames to system
+            '23': self.addDomain,                       # add domain names to system
             '2M': self.printMainMenu,                   # return to main menu
         }
         return menuActions
@@ -148,6 +148,8 @@ class FastInitialRecon:
         else:
             try:
                 self.clearScreen()
+                if (self.settings.debug):
+                    print("Menu selection: " + choice)
                 self.menuActions[choice]()
                 self.menuActions['main_menu']()
             except KeyError:
@@ -183,16 +185,27 @@ class FastInitialRecon:
         choice = self.readchar.readkey()
         self.execMenu('2' + choice.upper())
 
-    def printDiscoveredOpenPorts(self):
-        results = self.getDiscoveredOpenPorts()
+    def printDiscoveredOpenPorts(self, target=None):
+        results = self.getDiscoveredOpenPorts(target)
         discoveredOpenPortsTable = self.Texttable()
-        discoveredOpenPortsTable.header(['IP', 'Port Number', 'Port Type'])
+        discoveredOpenPortsTable.header(['IP', 'Port Number', 'Port Type', 'Common Purpose'])
         for result in results:
             if (result[2] == 1):
-                discoveredOpenPortsTable.add_row([result[0], str(result[1]), 'TCP'])
+                try:
+                    discoveredOpenPortsTable.add_row([result[0], str(result[1]), 'TCP', self.referenceData['commonTCPPortAssignments'][result[1]]])
+                except IndexError:
+                    discoveredOpenPortsTable.add_row([result[0], str(result[1]), 'TCP', 'No regsitered purpose'])
             elif (result[2] == 2):
-                discoveredOpenPortsTable.add_row([result[0], str(result[1]), 'UDP'])
+                try:
+                    discoveredOpenPortsTable.add_row([result[0], str(result[1]), 'UDP', self.referenceData['commonUDPPortAssignments'][result[1]]])
+                except (IndexError):
+                    discoveredOpenPortsTable.add_row([result[0], str(result[1]), 'UDP', 'No regsitered purpose'])
         print(discoveredOpenPortsTable.draw() + "\n")
+
+    def printDetailsOfTarget(self):
+        target = raw_input("Specify target by IP: ")
+        self.printDiscoveredOpenPorts(target)
+        self.printFindings(target)
 
     def printFindings(self, target=None):
         results = self.getFindings(target)
@@ -206,17 +219,13 @@ class FastInitialRecon:
             pass
         print(findingsTable.draw() + "\n")
 
-    def printFindingsForTarget(self):
-        target = raw_input("Specify target by IP: ")
-        self.printFindings(target)
-
     def printMainMenu(self):
         print ('Select your action:')
         print ('  1 - Run default tools')
         print ('  2 - Run ...')
         print ('  3 - Show discovered ports on all targeted systems')
         print ('  4 - Show findings on all targeted systems')
-        print ('  5 - Show findings on specified target')
+        print ('  5 - Show all details of specified target')
         print ('  6 - Add data (usernames etc)')
         print ('  C - Clear Screen')
         print ('  Q - Quit')
@@ -258,8 +267,11 @@ class FastInitialRecon:
         for username in usernames.split(","):
             self.databaseTransaction("INSERT INTO usernames (username) VALUES(?)", (str(username),))
 
-    def getDiscoveredOpenPorts(self):
-        results = self.databaseTransaction("SELECT hosts.host, openPorts.portNum, openPorts.portType FROM hosts, openPorts WHERE hosts.id=openPorts.hostID ORDER BY hosts.host, openPorts.portNum")
+    def getDiscoveredOpenPorts(self, target=None):
+        if (target):
+            results = self.databaseTransaction("SELECT hosts.host, openPorts.portNum, openPorts.portType FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND hosts.host = ? ORDER BY hosts.host, openPorts.portNum", (target,))
+        else:
+            results = self.databaseTransaction("SELECT hosts.host, openPorts.portNum, openPorts.portType FROM hosts, openPorts WHERE hosts.id=openPorts.hostID ORDER BY hosts.host, openPorts.portNum")
         return results
 
     def getFindings(self, target=None):
@@ -348,6 +360,10 @@ class FastInitialRecon:
                         netbiosType = str.replace(netbiosCodeResult.upper(), code[0], code[1]).split("~=~=~")[2]
                         netbiosValue = str.replace(netbiosCodeResult.upper(), code[0], code[1]).split("~=~=~")[1]
                     findingText = findingText + "\n" + netbiosType + ":" + netbiosValue
+                    if (self.re.search("Workstation Service", netbiosType)):
+                        hostnameCheckResult = self.databaseTransaction("SELECT DISTINCT hostname FROM hostnames WHERE hostname = ?", (str(netbiosValue).lower(),))
+                        if (not hostnameCheckResult):
+                            self.databaseTransaction('INSERT INTO hostnames (hostname) VALUES(?)', (str(netbiosValue).lower(),))
             self.storeFinding(host[0], 139, 1, 'NBTscan', self.re.sub("^\n", '', findingText))
 
     def portScan(self, allPorts=False):
@@ -412,27 +428,44 @@ class FastInitialRecon:
         targets = self.databaseTransaction("SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND (openPorts.portNum=445 OR openPorts.portNum=139) AND openPorts.portType = 1 ORDER BY hosts.host")
         for host in targets:
             self.executeMSFcommand(self.msfConsole, 'set RHOSTS '+host[0]+'/32')
-            msfResult = self.executeMSFcommand(self.msfConsole, 'run')
+            msfFullResult = self.executeMSFcommand(self.msfConsole, 'run')
+            msfResult = self.grep(msfFullResult['data'], host[0])
+            if (msfResult == ''):
+                if (self.settings.debug):
+                    print("Host didn't respond to scan, trying one last time")
+                msfFullResult = self.executeMSFcommand(self.msfConsole, 'run')
+                msfResult = self.grep(msfFullResult['data'], host[0])
             try:
-                portNum = int(self.grep(msfResult['data'], host[0]).split("Host is running ")[0].split(":")[1].split(" ")[0])
-            except IndexError as e:
-                print (e)
-                print (msfResult['data'])
+                portNum = int(msfResult.split("Host is running ")[0].split(":")[1].split(" ")[0])
+            except IndexError:
+                pass
             try:
-                msfFinding = self.grep(msfResult['data'], host[0]).split("Host is running ")[1]
-            except IndexError as e:
-                print(e)
-                print(msfResult['data'])
-            self.storeFinding(host[0],portNum,1,"SMB Version Scan",msfFinding)
+                msfFinding = msfResult.split("Host is running ")[1]
+            except IndexError:
+                pass
+            if (msfFinding):
+                self.storeFinding(host[0],portNum,1,"SMB Version Scan",msfFinding)
 
     def smbUsersScan(self):
         self.executeMSFcommand(self.msfConsole, 'use auxiliary/scanner/smb/smb_enumusers')
         targets = self.databaseTransaction("SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND (openPorts.portNum=445 OR openPorts.portNum=139) AND openPorts.portType = 1 ORDER BY hosts.host")
         for host in targets:
             self.executeMSFcommand(self.msfConsole, 'set RHOSTS '+host[0]+'/32')
-            msfResult = self.executeMSFcommand(self.msfConsole, 'run')
-            portNum = int(self.grep(msfResult['data'], host[0]).split(" - ")[0].split(":")[1].split(" ")[0])
-            msfFindingDetail = self.grep(msfResult['data'], host[0]).split(" [ ")[1].split(" ]")[0]
+            msfFullResult = self.executeMSFcommand(self.msfConsole, 'run')
+            msfResult = self.grep(msfFullResult['data'], host[0])
+            if (msfResult == ''):
+                if (self.settings.debug):
+                    print("Host didn't respond to scan, trying one last time")
+                msfFullResult = self.executeMSFcommand(self.msfConsole, 'run')
+                msfResult = self.grep(msfFullResult['data'], host[0])
+            try:
+                portNum = int(msfResult.split(" - ")[0].split(":")[1].split(" ")[0])
+            except IndexError:
+                pass
+            try:
+                msfFindingDetail = msfResult.split(" [ ")[1].split(" ]")[0]
+            except IndexError:
+                pass
             if (msfFindingDetail):
                 msfFinding = 'Users found: ' + msfFindingDetail
             else:
