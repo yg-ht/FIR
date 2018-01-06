@@ -400,6 +400,8 @@ class FastInitialRecon:
         self.checkSMBshareAccess()
         print("Checking for MS08-067 vulnerable")
         self.checkMS08067()
+        print("Checking for SSH protocol versions in place")
+        self.checkSSHversion()
 
     def singlePortScan_TCP(self, targetPort, nmapGenericSettings):
         nm = self.nmap.PortScanner()
@@ -508,3 +510,15 @@ class FastInitialRecon:
                     if (self.grep(axfrResult, ';; Query time:')):
                         self.storeFinding(dnsServer[0], 53, 2, 'AXFR Checker', axfrResult)
                         print (axfrResult)
+
+    def checkSSHversion(self):
+        sshServers = self.databaseTransaction("SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=22 AND openPorts.portType = 1 ORDER BY hosts.host")
+        for server in sshServers:
+            sshCheckProcess = self.subprocess.Popen(["ssh", "-vN", "-oBatchMode=yes", "-oStrictHostKeyChecking=no", "-oUserKnownHostsFile=/dev/null", server[0]], stdout=self.subprocess.PIPE,stderr=self.subprocess.STDOUT)
+            sshCheckResultFull = self.stripUnicode(sshCheckProcess.communicate()[0])
+            try:
+                sshCheckResult = self.grepv(self.grep(sshCheckResultFull, "remote software version").split("debug1: ")[1].split(", remote software version")[0], "Remote protocol version 2.0")
+            except IndexError:
+                pass
+            if (sshCheckResult):
+                self.storeFinding(server[0], 22, 1, 'SSH Protocol Version Checker', sshCheckResult)

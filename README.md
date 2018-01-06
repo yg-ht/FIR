@@ -33,7 +33,6 @@ To make this a minimum viable product for initial noisey recon the following mus
 
 - DNS enumeration
 - SNMP common comunity string detection
-- SSH version detection
 - pulling password policies
 - enum4linux esq stuff
 - smtp enum of users
