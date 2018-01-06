@@ -396,6 +396,8 @@ class FastInitialRecon:
         self.checkSMBshares()
         print("SMB Share Unauthenticated Access scan")
         self.checkSMBshareAccess()
+        print("Checking for MS08-067 vulnerable")
+        self.checkMS08067()
 
     def singlePortScan_TCP(self, targetPort, nmapGenericSettings):
         nm = self.nmap.PortScanner()
@@ -471,3 +473,22 @@ class FastInitialRecon:
             else:
                 msfFinding = 'No users found on host (probably no permissions)'
             self.storeFinding(host[0],portNum,1,"SMB user discovery",msfFinding)
+
+    def checkMS08067(self):
+        self.executeMSFcommand(self.msfConsole, 'use exploit/windows/smb/ms08_067_netapi')
+        targets = self.databaseTransaction("SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=445 AND openPorts.portType = 1 ORDER BY hosts.host")
+        for host in targets:
+            self.executeMSFcommand(self.msfConsole, 'set RHOST ' + host[0])
+            msfFullResult = self.executeMSFcommand(self.msfConsole, 'check')
+            msfResult = self.grep(msfFullResult['data'], host[0])
+            if (msfResult == ''):
+                if (self.settings.debug):
+                    print("Host didn't respond to scan, trying one last time")
+                msfFullResult = self.executeMSFcommand(self.msfConsole, 'check')
+                msfResult = self.grep(msfFullResult['data'], host[0])
+            try:
+                msfFinding = msfResult.split(":445 ")[1]
+            except IndexError:
+                pass
+            if (msfFinding):
+                self.storeFinding(host[0], 445, 1, "MS08-067 checker", msfFinding)

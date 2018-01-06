@@ -36,7 +36,6 @@ To make this a minimum viable product for initial noisey recon the following mus
 - SSH version detection
 - null session enumeration
 - pulling password policies
-- identifying ms08-067 vulnerable machines
 - enum4linux esq stuff
 - smtp enum of users
 - ruser
