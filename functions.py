@@ -133,6 +133,7 @@ class FastInitialRecon:
             '0Q': self.shutdown,                        # quit
             '11': self.nbtScan,                         # run NBTscanner
             '12': self.smbVersionScan,                  # run SMB version scanner
+            '13': self.checkAXFR,                       # run the AXFR checker
             '1M': self.printMainMenu,                   # return to main menu
             '20': self.printCurrentData,                # show existing data in system
             '21': self.addUsername,                     # add usernames to system
@@ -237,7 +238,7 @@ class FastInitialRecon:
         print ('Select your action:')
         print ('  1 - Run NBTScan')
         print ('  2 - Run SMB Version Scanner')
-        print ('  3 - ...')
+        print ('  3 - Run AXFR checker')
         print ('  4 - ...')
         print ('  M - Main Menu')
         print (' >> ')
@@ -305,30 +306,31 @@ class FastInitialRecon:
         targets = self.databaseTransaction(
             "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND (openPorts.portNum=445 OR openPorts.portNum=139) AND openPorts.portType = 1 ORDER BY hosts.host")
         for host in targets:
+            smbSharesScanResultValue = ''
+            smbSharesScanResultType = ''
             smbSharesProcess = self.subprocess.Popen(["smbclient", "-N", "-L", host[0]], stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
             smbSharesScanResult = self.re.sub('\t', '', self.re.sub(' +',' ',self.grep(self.stripUnicode(smbSharesProcess.communicate()[0]), 'Disk')))
-            smbSharesScanResultValue = smbSharesScanResult.split(' ')[0]
-            smbSharesScanResultType = smbSharesScanResult.split(' ')[1]
-            self.storeFinding(host[0], 445, 1, 'SMB share discovery', 'Non-default share.\nNamed:\t' + smbSharesScanResultValue + '\nType:\t' + smbSharesScanResultType)
+            try:
+                smbSharesScanResultValue = smbSharesScanResult.split(' ')[0]
+                smbSharesScanResultType = smbSharesScanResult.split(' ')[1]
+            except (IndexError):
+                pass
+            if (smbSharesScanResultValue and smbSharesScanResultType):
+                self.storeFinding(host[0], 445, 1, 'SMB share discovery', 'Non-default share.\nNamed:\t' + smbSharesScanResultValue + '\nType:\t' + smbSharesScanResultType)
 
     def checkSMBshareAccess(self, username='', password=''):
         targets = self.databaseTransaction(
             "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND (openPorts.portNum=445 OR openPorts.portNum=139) AND openPorts.portType = 1 ORDER BY hosts.host")
         for host in targets:
             if (username and password):
-                smbSharesProcess = self.subprocess.Popen(["smbmap", "-H", host[0], "-U", username, "-P", password],
-                                                         stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
+                smbSharesProcess = self.subprocess.Popen(["smbmap", "-H", host[0], "-U", username, "-P", password],stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
             elif (username and not password):
-                smbSharesProcess = self.subprocess.Popen(["smbmap", "-H", host[0], "-U", username],
-                                                         stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
+                smbSharesProcess = self.subprocess.Popen(["smbmap", "-H", host[0], "-U", username],stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
             else:
-                smbSharesProcess = self.subprocess.Popen(["smbmap", "-H", host[0]], stdout=self.subprocess.PIPE,
-                                                         stderr=self.subprocess.STDOUT)
+                smbSharesProcess = self.subprocess.Popen(["smbmap", "-H", host[0]], stdout=self.subprocess.PIPE,stderr=self.subprocess.STDOUT)
             smbSharesScanResult = self.re.sub("\n\t", "\n", self.re.sub("^\t", '', self.re.sub(' +', ' ', self.grepv(
-                self.grepv(self.grepv(self.stripUnicode(smbSharesProcess.communicate()[0]), host[0]),
-                           'Finding open SMB ports....'), '-----------'))))
-            self.storeFinding(host[0], 445, 1, 'SMB share access checker',
-                              'The following share accesses were found:\n' + smbSharesScanResult)
+                self.grepv(self.grepv(self.stripUnicode(smbSharesProcess.communicate()[0]), host[0]),'Finding open SMB ports....'), '-----------'))))
+            self.storeFinding(host[0], 445, 1, 'SMB share access checker','The following share accesses were found:\n' + smbSharesScanResult)
 
     def executeMSFcommand(self, msfConsole, msfCommand, printOutput=False):
         msfConsole.write(msfCommand)
@@ -452,6 +454,8 @@ class FastInitialRecon:
         self.executeMSFcommand(self.msfConsole, 'use auxiliary/scanner/smb/smb_enumusers')
         targets = self.databaseTransaction("SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND (openPorts.portNum=445 OR openPorts.portNum=139) AND openPorts.portType = 1 ORDER BY hosts.host")
         for host in targets:
+            msfFindingDetail = ''
+            portNum = 0
             self.executeMSFcommand(self.msfConsole, 'set RHOSTS '+host[0]+'/32')
             msfFullResult = self.executeMSFcommand(self.msfConsole, 'run')
             msfResult = self.grep(msfFullResult['data'], host[0])
@@ -492,3 +496,15 @@ class FastInitialRecon:
                 pass
             if (msfFinding):
                 self.storeFinding(host[0], 445, 1, "MS08-067 checker", msfFinding)
+
+    def checkAXFR(self):
+        dnsServers = self.databaseTransaction("SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=53 AND openPorts.portType = 2 ORDER BY hosts.host")
+        domainResults = self.databaseTransaction("SELECT domain FROM domains ORDER BY domain")
+        if (domainResults):
+            for domain in domainResults:
+                for dnsServer in dnsServers:
+                    axfrProcess = self.subprocess.Popen(["dig", "axfr", domain[0], '@' + dnsServer[0]],stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
+                    axfrResult = self.stripUnicode(axfrProcess.communicate()[0])
+                    if (self.grep(axfrResult, ';; Query time:')):
+                        self.storeFinding(dnsServer[0], 53, 2, 'AXFR Checker', axfrResult)
+                        print (axfrResult)
