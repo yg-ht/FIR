@@ -402,6 +402,8 @@ class FastInitialRecon:
         self.checkMS08067()
         print("Checking for SSH protocol versions in place")
         self.checkSSHversion()
+        print("Check for default community strings")
+        self.checkDefaultSNMPCommunities()
 
     def singlePortScan_TCP(self, targetPort, nmapGenericSettings):
         nm = self.nmap.PortScanner()
@@ -522,3 +524,14 @@ class FastInitialRecon:
                 pass
             if (sshCheckResult):
                 self.storeFinding(server[0], 22, 1, 'SSH Protocol Version Checker', sshCheckResult)
+
+    def checkDefaultSNMPCommunities(self):
+        self.executeMSFcommand(self.msfConsole, 'use auxiliary/scanner/snmp/snmp_login')
+        self.executeMSFcommand(self.msfConsole, 'set VERSION all')
+        targets = self.databaseTransaction("SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=161 AND openPorts.portType = 2 ORDER BY hosts.host")
+        for target in targets:
+            self.executeMSFcommand(self.msfConsole, 'set RHOSTS ' + target[0] + '/32')
+            snmpCheckResultFull = self.executeMSFcommand(self.msfConsole, 'run')
+            snmpCheckResult = self.grepv(self.grepv(snmpCheckResultFull['data'], 'Scanned 1 of 1 hosts'), 'Auxiliary module execution completed')
+            if (snmpCheckResult):
+                self.storeFinding(target[0], 161, 2, 'SNMP Default Communities Checker', snmpCheckResult)

@@ -29,10 +29,9 @@ This script should auto-detect MSFRPC running status and start if required, othe
     
 ## Future features (To do list)
 
-To make this a minimum viable product for initial noisey recon the following must be in place:
+To make this a minimum viable product for Fast Initial (noisey) Recon the following must be in place:
 
 - DNS enumeration
-- SNMP common comunity string detection
 - pulling password policies
 - enum4linux esq stuff
 - smtp enum of users
@@ -40,7 +39,7 @@ To make this a minimum viable product for initial noisey recon the following mus
 - rwho
 - finger
 - ftp anonymous login checking
-- ftp anonymous access
+- ftp anonymous access rights
 - identify IIS / Apache versions (and associated exploitDB data)
 - identify MSSQL with default creds
 - multi-thread prep for the below:
