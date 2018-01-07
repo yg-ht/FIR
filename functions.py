@@ -480,6 +480,8 @@ class FastInitialRecon:
         self.checkSSHversion()
         print("Check for default community strings")
         self.checkSNMPForDefaultCommunities()
+        print("Checking for hostnames in DNS")
+        self.checkDNSForHostname()
 
     def singlePortScan_TCP(self, targetPort):
         nm = self.nmap.PortScanner()

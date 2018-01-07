@@ -31,8 +31,8 @@ This script should auto-detect MSFRPC running status and start if required, othe
 
 To make this a minimum viable product for Fast Initial (noisey) Recon the following must be in place:
 
+- collect domain names
 - search by keyword
-- DNS enumeration
 - pulling password policies
 - enum4linux esq stuff
 - smtp enum of users
@@ -43,8 +43,6 @@ To make this a minimum viable product for Fast Initial (noisey) Recon the follow
 - ftp anonymous access rights
 - identify IIS / Apache versions (and associated exploitDB data)
 - identify MSSQL with default creds
-- multi-thread prep for the below:
-- nmap all remaining ports
 
 ## Thanks and acknowledgments
 

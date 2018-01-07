@@ -376,7 +376,7 @@ def buildReferenceArrays(self):
         3323: "DECE GEODI Server",
         3333: "Eggdrop / Network Caller ID server / CruiseControl.rb",
         3386: "GTP' 3GPP GSM/UMTS CDR logging protocol",
-        3389: "Microsoft Terminal Server (RDP) officially registered as Windows Based Terminal (WBT)",
+        3389: "Microsoft Terminal Server (RDP)",
         3396: "Novell NDPS Printer Agent",
         3412: "xmlBlaster",
         3455: "Resource Reservation Protocol (RSVP)",
