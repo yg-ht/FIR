@@ -19,6 +19,7 @@ This is a new project designed to automate early enumeration tasks.  Inspired by
  - Checks is AXFR is enabled on any DNS servers for known domains
  - Looks for default credentials on MSSQL servers
  - Attempts to enumerate user accounts on the Finger service
+ - Checks to see if SMTP will leak AD Domain info
 
 This is at beta stages in its development - please report bugs (or better still, submit pull requests)
 
@@ -51,12 +52,9 @@ this manually, update the settings.py file with your credentials and run MSFRPCd
 To make this a minimum viable product for Fast Initial (noisey) Recon the following must be in place:
 
  - smtp enum of users
- - ruser
- - rwho
  - ftp anonymous login checking
  - ftp anonymous access rights
  - identify IIS / Apache versions (and associated exploitDB data)
- - identify MSSQL with default creds
 
 ## Thanks and acknowledgments
 

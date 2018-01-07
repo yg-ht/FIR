@@ -325,6 +325,7 @@ class FastInitialRecon:
         print ('  5 - Check SNMP Services For Default Communities')
         print ('  6 - Check for Default MSSQL Creds')
         print ('  7 - Finger service user enumeration')
+        print ('  8 - Check for Domain leak in SMTP service')
         print ('  M - Main Menu')
         print (' >> ')
         choice = self.readchar.readkey()
@@ -502,6 +503,7 @@ class FastInitialRecon:
         self.checkDNSForAXFR()
         self.checkMSSQLDefaultCreds()
         self.checkFingerUsers()
+        self.checkSMTPForDomains()
 
     def singlePortScan_TCP(self, targetPort):
         nm = self.nmap.PortScanner()
@@ -671,8 +673,7 @@ class FastInitialRecon:
         for target in targets:
             self.executeMSFcommand(self.msfConsole, 'set RHOSTS ' + target[0] + '/32')
             snmpCheckResultFull = self.executeMSFcommand(self.msfConsole, 'run')
-            snmpCheckResult = self.grepv(self.grepv(snmpCheckResultFull['data'], 'Scanned 1 of 1 hosts'),
-                                         'Auxiliary module execution completed')
+            snmpCheckResult = self.grepv(self.grepv(snmpCheckResultFull['data'], 'Scanned 1 of 1 hosts'),'Auxiliary module execution completed')
             if snmpCheckResult:
                 self.storeFinding(target[0], 161, 2, 'SNMP Default Communities Checker', snmpCheckResult)
 
@@ -690,7 +691,9 @@ class FastInitialRecon:
                     self.executeMSFcommand(self.msfConsole, 'set PASSWORD ' + password[0])
                     resultsFull = 'Attempt with ' + username[0] + " / " + password[0] + ' against ' + target[0] + '\n'
                     resultsFull = resultsFull + self.executeMSFcommand(self.msfConsole, 'run')
-                    self.storeFinding(target[0], 1433, 1, 'MSSQL Default Creds Checker', resultsFull)
+                    results = self.grepv(self.grepv(resultsFull, 'Scanned 1 of 1 hosts'), 'Auxiliary module execution completed')
+                    if results:
+                        self.storeFinding(target[0], 1433, 1, 'MSSQL Default Creds Checker', results)
 
     def checkFingerUsers(self):
         print("Checking for finger service user enumeration")
@@ -700,4 +703,18 @@ class FastInitialRecon:
             self.executeMSFcommand(self.msfConsole, 'set RHOSTS ' + target[0] + '/32')
             resultsFull = 'Attempt against ' + target[0] + '\n'
             resultsFull = resultsFull + self.executeMSFcommand(self.msfConsole, 'run')
-            self.storeFinding(target[0], 79, 1, 'Finger user enum checker', resultsFull)
+            results = self.grepv(self.grepv(resultsFull,'Scanned 1 of 1 hosts'), 'Auxiliary module execution completed')
+            if results:
+                self.storeFinding(target[0], 79, 1, 'Finger user enum checker', results)
+
+    def checkSMTPForDomains(self):
+        print("Checking SMTP service for domain info leaks")
+        targets = self.databaseTransaction("SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=25 AND openPorts.portType = 1 ORDER BY hosts.host")
+        self.executeMSFcommand(self.msfConsole, 'use auxiliary/scanner/smtp/smtp_ntlm_domain')
+        for target in targets:
+            self.executeMSFcommand(self.msfConsole, 'set RHOSTS ' + target[0] + '/32')
+            resultsFull = 'Attempt against ' + target[0] + '\n'
+            resultsFull = resultsFull + self.executeMSFcommand(self.msfConsole, 'run')
+            results = self.grepv(self.grepv(resultsFull, 'Scanned 1 of 1 hosts'), 'Auxiliary module execution completed')
+            if results:
+                self.storeFinding(target[0], 25, 1, 'SMTP Domain Info Leak', results)
