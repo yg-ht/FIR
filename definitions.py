@@ -2,7 +2,7 @@ def buildReferenceArrays(self):
     referenceData = dict()
 
     referenceData['portTypes'] = [
-        [0, 'General Finding'],
+        [0, 'None'],
         [1, 'TCP'],
         [2, 'UDP'],
         [3, 'ICMP']
@@ -987,6 +987,7 @@ def buildReferenceArrays(self):
         161: "SNMP"
     }
 
-    referenceData['commonUsernames'] = ["administrator", "admin", "root", "user", "guest", ""]
+    referenceData['commonUsernames'] = ["administrator", "admin", "root", "user", "guest", "sa", ""]
+    referenceData['commonPasswords'] = ["Password1", "Password", "password", "admin", "administrator", "sa", ""]
 
     return referenceData

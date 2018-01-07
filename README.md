@@ -31,10 +31,6 @@ This script should auto-detect MSFRPC running status and start if required, othe
 
 To make this a minimum viable product for Fast Initial (noisey) Recon the following must be in place:
 
-- collect domain names
-- search by keyword
-- pulling password policies
-- enum4linux esq stuff
 - smtp enum of users
 - ruser
 - rwho

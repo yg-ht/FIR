@@ -71,6 +71,13 @@ class FastInitialRecon:
         for username in self.referenceData['commonUsernames']:
             self.databaseTransaction("INSERT INTO usernames (username) VALUES(?)", (str(username),))
         if self.settings.debug:
+            print ("Creating passwords table")
+        self.databaseTransaction("CREATE TABLE passwords (id INTEGER PRIMARY KEY, password TEXT)")
+        if self.settings.debug:
+            print ("Populating passwords table")
+        for password in self.referenceData['commonPasswords']:
+            self.databaseTransaction("INSERT INTO passwords (password) VALUES(?)", (str(password),))
+        if self.settings.debug:
             print ("Creating hostnames table")
         self.databaseTransaction("CREATE TABLE hostnames (id INTEGER PRIMARY KEY, hostname TEXT)")
         if self.settings.debug:
@@ -181,6 +188,7 @@ class FastInitialRecon:
             '04': self.printFindings,
             '05': self.printDetailsOfTarget,
             '06': self.printDataMenu,
+            '07': self.printDetailsFollowingSearch,
             '0C': self.clearScreen,
             '0Q': self.shutdown,
             '11': self.nbtScan,
@@ -188,6 +196,7 @@ class FastInitialRecon:
             '13': self.checkDNSForAXFR,
             '14': self.checkDNSForHostname,
             '15': self.checkSNMPForDefaultCommunities,
+            '16': self.checkMSSQLDefaultCreds,
             '1M': self.printMainMenu,
             '20': self.printCurrentData,
             '21': self.addUsername,
@@ -262,6 +271,18 @@ class FastInitialRecon:
                     discoveredOpenPortsTable.add_row([result[0], str(result[1]), 'UDP', 'No regsitered purpose'])
         print(discoveredOpenPortsTable.draw() + "\n")
 
+    def printDetailsFollowingSearch(self):
+        searchCriteria = raw_input("Specify search criteria: ")
+        targets = self.databaseTransaction("SELECT DISTINCT hosts.host FROM hosts, openPorts, findings WHERE hosts.id = openPorts.hostID AND openPorts.id = findings.OpenPortID AND LOWER(findings.finding) LIKE '%" + searchCriteria.lower() + "%'")
+        print(targets)
+        for target in targets:
+            try:
+                self.printDiscoveredOpenPorts(target[0])
+                self.printFindings(target[0])
+                print("=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-")
+            except TypeError:
+                continue
+
     def printDetailsOfTarget(self):
         target = raw_input("Specify target by IP: ")
         self.printDiscoveredOpenPorts(target)
@@ -270,11 +291,11 @@ class FastInitialRecon:
     def printFindings(self, target=None):
         results = self.getFindings(target)
         findingsTable = self.Texttable()
-        findingsTable.set_cols_width([16, 6, 5, 12, 70])
+        findingsTable.set_cols_width([16, 6, 5, 12, 80])
         findingsTable.header(['IP', 'Port Number', 'Port Type', 'Data Source', 'Finding'])
         try:
             for result in results:
-                findingsTable.add_row([result[0], str(result[1]), 'TCP', result[3], result[4]])
+                findingsTable.add_row([result[0], str(result[1]), str(self.referenceData['portTypes'][result[2]][1]), result[3], result[4]])
         except TypeError:
             pass
         print(findingsTable.draw() + "\n")
@@ -287,6 +308,7 @@ class FastInitialRecon:
         print ('  4 - Show findings on all targeted systems')
         print ('  5 - Show all details of specified target')
         print ('  6 - Add data (usernames etc)')
+        print ('  7 - Findings free-text search')
         print ('  C - Clear Screen')
         print ('  Q - Quit')
         print (' >> ')
@@ -300,6 +322,7 @@ class FastInitialRecon:
         print ('  3 - Run AXFR checker')
         print ('  4 - Run Hostname in DNS checker')
         print ('  5 - Check SNMP Services For Default Communities')
+        print ('  6 - Check for Default MSSQL Creds')
         print ('  M - Main Menu')
         print (' >> ')
         choice = self.readchar.readkey()
@@ -373,6 +396,7 @@ class FastInitialRecon:
     #---- primary functionality ----#
 
     def checkSMBshares(self):
+        print("SMB Non-Standard Share scan")
         targets = self.databaseTransaction(
             "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND (openPorts.portNum=445 OR openPorts.portNum=139) AND openPorts.portType = 1 ORDER BY hosts.host")
         for host in targets:
@@ -392,6 +416,7 @@ class FastInitialRecon:
                                   'Non-default share.\nNamed:\t' + smbSharesScanResultValue + '\nType:\t' + smbSharesScanResultType)
 
     def checkSMBshareAccess(self, username='', password=''):
+        print("SMB Share Unauthenticated Access scan")
         targets = self.databaseTransaction(
             "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND (openPorts.portNum=445 OR openPorts.portNum=139) AND openPorts.portType = 1 ORDER BY hosts.host")
         for host in targets:
@@ -411,6 +436,7 @@ class FastInitialRecon:
                               'The following share accesses were found:\n' + smbSharesScanResult)
 
     def nbtScan(self):
+        print("NBTscan")
         targets = self.databaseTransaction((
             "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=139 AND openPorts.portType = 1 ORDER BY hosts.host"))
         for host in targets:
@@ -445,6 +471,7 @@ class FastInitialRecon:
             self.storeFinding(host[0], 139, 1, 'NBTscan', self.re.sub("^\n", '', findingText))
 
     def portScan(self, allPorts=False):
+        print("Targeted portscan")
         if allPorts:
             for targetPort in range(1, 65535):
                 if self.settings.debug:
@@ -462,26 +489,18 @@ class FastInitialRecon:
 
     def runDefaultTools(self):
         print('Running default tools:')
-        print("Reduced portscan")
         self.portScan()
-        print("NBTscan")
         self.nbtScan()
-        print("SMB Version scan")
         self.smbVersionScan()
-        print("SMB Enumerable Users scan")
         self.smbUsersScan()
-        print("SMB Non-Standard Share scan")
         self.checkSMBshares()
-        print("SMB Share Unauthenticated Access scan")
         self.checkSMBshareAccess()
-        print("Checking for MS08-067 vulnerable")
         self.checkMS08067()
-        print("Checking for SSH protocol versions in place")
         self.checkSSHversion()
-        print("Check for default community strings")
         self.checkSNMPForDefaultCommunities()
-        print("Checking for hostnames in DNS")
         self.checkDNSForHostname()
+        self.checkDNSForAXFR()
+        self.checkMSSQLDefaultCreds()
 
     def singlePortScan_TCP(self, targetPort):
         nm = self.nmap.PortScanner()
@@ -517,6 +536,7 @@ class FastInitialRecon:
                                          (hostID, targetPort))
 
     def smbVersionScan(self):
+        print("SMB Version scan")
         self.executeMSFcommand(self.msfConsole, 'use auxiliary/scanner/smb/smb_version')
         targets = self.databaseTransaction(
             "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND (openPorts.portNum=445 OR openPorts.portNum=139) AND openPorts.portType = 1 ORDER BY hosts.host")
@@ -538,6 +558,7 @@ class FastInitialRecon:
                 self.storeFinding(host[0], portNum, 1, "SMB Version Scan", msfFinding)
 
     def smbUsersScan(self):
+        print("SMB Enumerable Users scan")
         self.executeMSFcommand(self.msfConsole, 'use auxiliary/scanner/smb/smb_enumusers')
         targets = self.databaseTransaction(
             "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND (openPorts.portNum=445 OR openPorts.portNum=139) AND openPorts.portType = 1 ORDER BY hosts.host")
@@ -558,12 +579,13 @@ class FastInitialRecon:
             except IndexError:
                 continue
             if msfFindingDetail:
-                msfFinding = 'Users found: ' + msfFindingDetail
+                msfFinding = 'Users found:\n' + msfFindingDetail
             else:
                 msfFinding = 'No users found on host (probably no permissions)'
-            self.storeFinding(host[0], portNum, 1, "SMB user discovery", msfFinding)
+            self.storeFinding(host[0], portNum, 1, "SMB user discovery", msfFinding + "\n\n This also implies unauthenticated RPC")
 
     def checkMS08067(self):
+        print("Checking for MS08-067 vulnerable")
         self.executeMSFcommand(self.msfConsole, 'use exploit/windows/smb/ms08_067_netapi')
         targets = self.databaseTransaction(
             "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=445 AND openPorts.portType = 1 ORDER BY hosts.host")
@@ -584,6 +606,7 @@ class FastInitialRecon:
                 self.storeFinding(host[0], 445, 1, "MS08-067 checker", msfFinding)
 
     def checkDNSForAXFR(self):
+        print ("Checking for AXFR on DNS servers")
         dnsServers = self.databaseTransaction(
             "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=53 AND openPorts.portType = 2 ORDER BY hosts.host")
         domainResults = self.databaseTransaction("SELECT domain FROM domains ORDER BY domain")
@@ -598,6 +621,7 @@ class FastInitialRecon:
                         print (axfrResult)
 
     def checkDNSForHostname(self):
+        print("Checking for hostnames in DNS")
         domains = self.databaseTransaction("SELECT domain FROM domains ORDER BY domain")
         domains.append([''])
         dnsServers = self.databaseTransaction(
@@ -622,6 +646,7 @@ class FastInitialRecon:
                         self.storeFinding(resultIP, 0, 0, 'Host in DNS Checker', 'DNS Server ' + dnsServer[0] + ' reports: \n' + result)
 
     def checkSSHversion(self):
+        print("Checking for SSH protocol versions in place")
         sshServers = self.databaseTransaction(
             "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=22 AND openPorts.portType = 1 ORDER BY hosts.host")
         for server in sshServers:
@@ -630,14 +655,14 @@ class FastInitialRecon:
                  server[0]], stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
             sshCheckResultFull = self.stripUnicode(sshCheckProcess.communicate()[0])
             try:
-                sshCheckResult = self.grepv(
-                    self.grep(sshCheckResultFull, "remote software version").split("debug1: ")[1].split(
-                        ", remote software version")[0], "Remote protocol version 2.0")
+                sshCheckResult = self.grep(sshCheckResultFull, "remote software version").split("debug1: ")[1].split(", remote software version")[0]
             except IndexError:
                 continue
-            self.storeFinding(server[0], 22, 1, 'SSH Protocol Version Checker', sshCheckResult)
+            if not self.re.search('Remote protocol version 2.0', sshCheckResult):
+                self.storeFinding(server[0], 22, 1, 'SSH Protocol Version Checker', sshCheckResult)
 
     def checkSNMPForDefaultCommunities(self):
+        print("Check for default community strings")
         self.executeMSFcommand(self.msfConsole, 'use auxiliary/scanner/snmp/snmp_login')
         self.executeMSFcommand(self.msfConsole, 'set VERSION all')
         targets = self.databaseTransaction(
@@ -649,3 +674,19 @@ class FastInitialRecon:
                                          'Auxiliary module execution completed')
             if snmpCheckResult:
                 self.storeFinding(target[0], 161, 2, 'SNMP Default Communities Checker', snmpCheckResult)
+
+    def checkMSSQLDefaultCreds(self):
+        print("MSSQL Default Creds Checker")
+        targets = self.databaseTransaction("SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=1433 AND openPorts.portType = 1 ORDER BY hosts.host")
+        usernameResults = self.databaseTransaction("SELECT username FROM usernames ORDER BY username")
+        passwordResults = self.databaseTransaction("SELECT password FROM passwords ORDER BY password")
+        self.executeMSFcommand(self.msfConsole, 'use auxiliary/scanner/mssql/mssql_login')
+        for target in targets:
+            self.executeMSFcommand(self.msfConsole, 'set RHOSTS ' + target[0] + '/32')
+            for username in usernameResults:
+                self.executeMSFcommand(self.msfConsole, 'set USERNAME ' + username[0])
+                for password in passwordResults:
+                    self.executeMSFcommand(self.msfConsole, 'set PASSWORD ' + password[0])
+                    resultsFull = 'Attempt with ' + username[0] + " / " + password[0] + ' against ' + target[0] + '\n'
+                    resultsFull = resultsFull + self.executeMSFcommand(self.msfConsole, 'run')
+                    self.storeFinding(target[0], 1433, 1, 'MSSQL Default Creds Checker', resultsFull)
