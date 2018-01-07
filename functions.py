@@ -109,6 +109,7 @@ class FastInitialRecon:
         # / init database
 
         #---- lets go ----#
+        self.portScan()
         self.printMainMenu()
 
     #---- Core functionality ----#
@@ -198,11 +199,14 @@ class FastInitialRecon:
             '15': self.checkSNMPForDefaultCommunities,
             '16': self.checkMSSQLDefaultCreds,
             '17': self.checkFingerUsers,
+            '18': self.checkSMTPForDomains,
+            '19': self.SMTPUserEnum,
             '1M': self.printMainMenu,
             '20': self.printCurrentData,
             '21': self.addUsername,
             '22': self.addHostname,
             '23': self.addDomain,
+            '24': self.addPassword,
             '2M': self.printMainMenu
         }
         return menuActions
@@ -246,6 +250,7 @@ class FastInitialRecon:
         print ('  1 - Add usernames')
         print ('  2 - Add hostnames')
         print ('  3 - Add domains')
+        print ('  4 - Add passwords')
         print ('  M - Main Menu')
         choice = self.readchar.readkey()
         self.execMenu('2' + choice.upper())
@@ -326,6 +331,7 @@ class FastInitialRecon:
         print ('  6 - Check for Default MSSQL Creds')
         print ('  7 - Finger service user enumeration')
         print ('  8 - Check for Domain leak in SMTP service')
+        print ('  9 - Perform SMTP User Enumeration')
         print ('  M - Main Menu')
         print (' >> ')
         choice = self.readchar.readkey()
@@ -353,6 +359,13 @@ class FastInitialRecon:
         usernames = raw_input("Username(s): ")
         for username in usernames.split(","):
             self.databaseTransaction("INSERT INTO usernames (username) VALUES(?)", (str(username),))
+
+    def addPassword(self):
+        print ("Add password")
+        print ("Either add a single record and press enter, or, separate multiple records with commas (no spaces)")
+        passwords = raw_input("Password(s): ")
+        for password in passwords.split(","):
+            self.databaseTransaction("INSERT INTO passwords (password) VALUES(?)", (str(password),))
 
     def getDiscoveredOpenPorts(self, target=None):
         if target:
@@ -490,7 +503,6 @@ class FastInitialRecon:
 
     def runDefaultTools(self):
         print('Running default tools:')
-        self.portScan()
         self.nbtScan()
         self.smbVersionScan()
         self.smbUsersScan()
@@ -504,6 +516,7 @@ class FastInitialRecon:
         self.checkMSSQLDefaultCreds()
         self.checkFingerUsers()
         self.checkSMTPForDomains()
+        self.SMTPUserEnum()
 
     def singlePortScan_TCP(self, targetPort):
         nm = self.nmap.PortScanner()
@@ -653,9 +666,7 @@ class FastInitialRecon:
         sshServers = self.databaseTransaction(
             "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=22 AND openPorts.portType = 1 ORDER BY hosts.host")
         for server in sshServers:
-            sshCheckProcess = self.subprocess.Popen(
-                ["ssh", "-vN", "-oBatchMode=yes", "-oStrictHostKeyChecking=no", "-oUserKnownHostsFile=/dev/null",
-                 server[0]], stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
+            sshCheckProcess = self.subprocess.Popen(["ssh", "-vN", "-oBatchMode=yes", "-oStrictHostKeyChecking=no", "-oUserKnownHostsFile=/dev/null", server[0]], stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
             sshCheckResultFull = self.stripUnicode(sshCheckProcess.communicate()[0])
             try:
                 sshCheckResult = self.grep(sshCheckResultFull, "remote software version").split("debug1: ")[1].split(", remote software version")[0]
@@ -718,3 +729,23 @@ class FastInitialRecon:
             results = self.grepv(self.grepv(resultsFull, 'Scanned 1 of 1 hosts'), 'Auxiliary module execution completed')
             if results:
                 self.storeFinding(target[0], 25, 1, 'SMTP Domain Info Leak', results)
+
+    def SMTPUserEnum(self):
+        print("Performing SMTP User Enumeration")
+        usernameResults = self.databaseTransaction("SELECT username FROM usernames ORDER BY username")
+        targets = self.databaseTransaction("SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=25 AND openPorts.portType = 1 ORDER BY hosts.host")
+        for target in targets:
+            for username in usernameResults:
+                resultsFull = 'Attempt against ' + target[0] + ' with user ' + username[0] + ' using the VRFY method\n'
+                process = self.subprocess.Popen(["smtp-user-enum", "-M", "VRFY", "-u", username[0], "-t", target[0]],stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
+                resultsFull = self.stripUnicode(process.communicate()[0])
+                resultsFiltered = self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(resultsFull, '------------------'), 'Scan Information'), 'Mode ..............'), 'Worker Processes ..'), 'Target count ......'), 'Username count ....'), 'Target TCP port ...'), 'Query timeout .....'), 'Target domain .....'), '######## Scan '), ' queries in '), '0 results.')
+                if resultsFiltered:
+                    self.storeFinding(target[0], 25, 1, 'SMTP User Enumeration', resultsFiltered)
+
+                resultsFull = 'Attempt against ' + target[0] + ' with user ' + username[0] + ' using the EXPN method\n'
+                process = self.subprocess.Popen(["smtp-user-enum", "-M", "EXPN", "-u", username[0], "-t", target[0]],stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
+                resultsFull = self.stripUnicode(process.communicate()[0])
+                resultsFiltered = self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(resultsFull, '------------------'), 'Scan Information'),'Mode ..............'), 'Worker Processes ..'), 'Target count ......'),'Username count ....'), 'Target TCP port ...'), 'Query timeout .....'), 'Target domain .....'),'######## Scan '), ' queries in '), '0 results.')
+                if resultsFiltered:
+                    self.storeFinding(target[0], 25, 1, 'SMTP User Enumeration', resultsFiltered)
