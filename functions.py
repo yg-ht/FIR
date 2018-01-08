@@ -94,7 +94,8 @@ class FastInitialRecon:
             print ("Creating findings table")
         self.databaseTransaction(
             "CREATE TABLE findings (id INTEGER PRIMARY KEY, openPortID INTEGER, dataSource TEXT, finding TEXT, FOREIGN KEY (openPortID) REFERENCES openPorts(id))")
-        print ("Populating initial details in hosts and openPorts tables")
+        if self.settings.debug:
+            print ("Populating initial details in hosts and openPorts tables")
         hostsInsert = ''
         for hostAddr in self.IPNetwork(self.targetNetwork):
             hostsInsert = hostsInsert + '\n("' + str(hostAddr) + '"),'
@@ -108,11 +109,11 @@ class FastInitialRecon:
 
         # / init database
 
-        #---- lets go ----#
+        # ---- lets go ----#
         self.portScan()
+        self.runDefaultTools()
         self.printMainMenu()
-
-    #---- Core functionality ----#
+    # ---- Core functionality ----#
 
     def checkMSFRPCrunning(self):
         msfRPCRunning = False
@@ -178,7 +179,7 @@ class FastInitialRecon:
         print ('Quiting now...')
         self.sys.exit(0)
 
-    #---- Output functionality ----#
+    # ---- Output functionality ----#
 
     def buildMenuActions(self):
         menuActions = {
@@ -192,6 +193,7 @@ class FastInitialRecon:
             '07': self.printDetailsFollowingSearch,
             '0C': self.clearScreen,
             '0Q': self.shutdown,
+            '10': self.checkRDNSForIP,
             '11': self.nbtScan,
             '12': self.smbVersionScan,
             '13': self.checkDNSForAXFR,
@@ -200,7 +202,7 @@ class FastInitialRecon:
             '16': self.checkMSSQLDefaultCreds,
             '17': self.checkFingerUsers,
             '18': self.checkSMTPForDomains,
-            '19': self.SMTPUserEnum,
+            '19': self.checkSMTPUserEnum,
             '1M': self.printMainMenu,
             '20': self.printCurrentData,
             '21': self.addUsername,
@@ -279,7 +281,8 @@ class FastInitialRecon:
 
     def printDetailsFollowingSearch(self):
         searchCriteria = raw_input("Specify search criteria: ")
-        targets = self.databaseTransaction("SELECT DISTINCT hosts.host FROM hosts, openPorts, findings WHERE hosts.id = openPorts.hostID AND openPorts.id = findings.OpenPortID AND LOWER(findings.finding) LIKE '%" + searchCriteria.lower() + "%'")
+        targets = self.databaseTransaction(
+            "SELECT DISTINCT hosts.host FROM hosts, openPorts, findings WHERE hosts.id = openPorts.hostID AND openPorts.id = findings.OpenPortID AND LOWER(findings.finding) LIKE '%" + searchCriteria.lower() + "%'")
         print(targets)
         for target in targets:
             try:
@@ -301,7 +304,9 @@ class FastInitialRecon:
         findingsTable.header(['IP', 'Port Number', 'Port Type', 'Data Source', 'Finding'])
         try:
             for result in results:
-                findingsTable.add_row([result[0], str(result[1]), str(self.referenceData['portTypes'][result[2]][1]), result[3], result[4]])
+                findingsTable.add_row(
+                    [result[0], str(result[1]), str(self.referenceData['portTypes'][result[2]][1]), result[3],
+                     result[4]])
         except TypeError:
             pass
         print(findingsTable.draw() + "\n")
@@ -332,12 +337,13 @@ class FastInitialRecon:
         print ('  7 - Finger service user enumeration')
         print ('  8 - Check for Domain leak in SMTP service')
         print ('  9 - Perform SMTP User Enumeration')
+        print ('  0 - Check for IPs in rDNS')
         print ('  M - Main Menu')
         print (' >> ')
         choice = self.readchar.readkey()
         self.execMenu('1' + choice.upper())
 
-    #---- secondary functionality ----#
+    # ---- secondary functionality ----#
 
     def addDomain(self):
         print ("Add domain")
@@ -409,7 +415,7 @@ class FastInitialRecon:
             self.databaseTransaction("INSERT INTO findings (openPortID, dataSource, finding) VALUES (?, ?, ?)",
                                      (openPortID, dataSource, finding))
 
-    #---- primary functionality ----#
+    # ---- primary functionality ----#
 
     def checkSMBshares(self):
         print("SMB Non-Standard Share scan")
@@ -473,19 +479,23 @@ class FastInitialRecon:
                         checkExistsResult = self.databaseTransaction(
                             "SELECT DISTINCT hostname FROM hostnames WHERE hostname = ?", (str(netbiosValue).lower(),))
                         if not checkExistsResult:
-                            self.databaseTransaction('INSERT INTO hostnames (hostname) VALUES(?)',(str(netbiosValue).lower(),))
+                            self.databaseTransaction('INSERT INTO hostnames (hostname) VALUES(?)',
+                                                     (str(netbiosValue).lower(),))
                     if self.re.search("Domain / Workgroup Name", netbiosType):
                         netbiosValue = self.re.sub(' ', '', netbiosValue)
                         checkExistsResult = self.databaseTransaction(
                             "SELECT DISTINCT domain FROM domains WHERE domain = ?", (str(netbiosValue).lower(),))
                         if not checkExistsResult:
-                            self.databaseTransaction('INSERT INTO domains (domain) VALUES(?)',(str(netbiosValue).lower(),))
-                            self.databaseTransaction('INSERT INTO domains (domain) VALUES(?)',(str(netbiosValue).lower()+'.local',))
-                            self.databaseTransaction('INSERT INTO domains (domain) VALUES(?)',(str(netbiosValue).lower()+'.lan',))
+                            self.databaseTransaction('INSERT INTO domains (domain) VALUES(?)',
+                                                     (str(netbiosValue).lower(),))
+                            self.databaseTransaction('INSERT INTO domains (domain) VALUES(?)',
+                                                     (str(netbiosValue).lower() + '.local',))
+                            self.databaseTransaction('INSERT INTO domains (domain) VALUES(?)',
+                                                     (str(netbiosValue).lower() + '.lan',))
             self.storeFinding(host[0], 139, 1, 'NBTscan', self.re.sub("^\n", '', findingText))
 
     def portScan(self, allPorts=False):
-        print("Targeted portscan")
+        print("Running targeted portscan")
         if allPorts:
             for targetPort in range(1, 65535):
                 if self.settings.debug:
@@ -504,6 +514,7 @@ class FastInitialRecon:
     def runDefaultTools(self):
         print('Running default tools:')
         self.nbtScan()
+        self.checkRDNSForIP()
         self.smbVersionScan()
         self.smbUsersScan()
         self.checkSMBshares()
@@ -516,7 +527,7 @@ class FastInitialRecon:
         self.checkMSSQLDefaultCreds()
         self.checkFingerUsers()
         self.checkSMTPForDomains()
-        self.SMTPUserEnum()
+        self.checkSMTPUserEnum()
 
     def singlePortScan_TCP(self, targetPort):
         nm = self.nmap.PortScanner()
@@ -533,7 +544,9 @@ class FastInitialRecon:
                                          (hostID, targetPort))
 
     def singlePortScan_UDP(self, targetPort):
-        process = self.subprocess.Popen(["nmap", "-oG", "-", "-p", targetPort, "--open", "-n", "-Pn", "-sU", "-T5", self.targetNetwork],stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
+        process = self.subprocess.Popen(
+            ["nmap", "-oG", "-", "-p", targetPort, "--open", "-n", "-Pn", "-sU", "-T5", self.targetNetwork],
+            stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
         resultsFull = self.stripUnicode(process.communicate()[0])
         resultsFiltered = self.grep(resultsFull, targetPort + '/open/udp').splitlines()
         for line in resultsFiltered:
@@ -579,8 +592,6 @@ class FastInitialRecon:
         targets = self.databaseTransaction(
             "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND (openPorts.portNum=445 OR openPorts.portNum=139) AND openPorts.portType = 1 ORDER BY hosts.host")
         for host in targets:
-            msfFindingDetail = ''
-            portNum = 0
             self.executeMSFcommand(self.msfConsole, 'set RHOSTS ' + host[0] + '/32')
             msfFullResult = self.executeMSFcommand(self.msfConsole, 'run')
             msfResult = self.grep(msfFullResult['data'], host[0])
@@ -598,7 +609,8 @@ class FastInitialRecon:
                 msfFinding = 'Users found:\n' + msfFindingDetail
             else:
                 msfFinding = 'No users found on host (probably no permissions)'
-            self.storeFinding(host[0], portNum, 1, "SMB user discovery", msfFinding + "\n\n This also implies unauthenticated RPC")
+            self.storeFinding(host[0], portNum, 1, "SMB user discovery",
+                              msfFinding + "\n\n This also implies unauthenticated RPC")
 
     def checkMS08067(self):
         print("Checking for MS08-067 vulnerable")
@@ -615,11 +627,13 @@ class FastInitialRecon:
                 msfFullResult = self.executeMSFcommand(self.msfConsole, 'check')
                 msfResult = self.grep(msfFullResult['data'], host[0])
             try:
-                msfFinding = msfResult.split(":445 ")[1]
+                msfFinding = self.grepv(msfResult.split(":445 ")[1], 'The target is not exploitable')
             except IndexError:
                 continue
             if msfFinding:
-                self.storeFinding(host[0], 445, 1, "MS08-067 checker", msfFinding + "\n Use something like this in MSF:\nuse exploit/windows/smb/ms08_067_netapi\nset PAYLOAD windows/meterpreter/bind_tcp\nset RHOST " + host[0] + "\nexploit")
+                self.storeFinding(host[0], 445, 1, "MS08-067 checker",
+                                  msfFinding + " Use something like this in MSF:\n\nuse exploit/windows/smb/ms08_067_netapi\nset PAYLOAD windows/meterpreter/bind_tcp\nset RHOST " +
+                                  host[0] + "\nexploit")
 
     def checkDNSForAXFR(self):
         print ("Checking for AXFR on DNS servers")
@@ -651,25 +665,79 @@ class FastInitialRecon:
                     domainPostfix = ''
                 for hostname in hostnameResults:
                     for dnsServer in dnsServers:
-                        process = self.subprocess.Popen(["host", hostname[0]+domainPostfix, dnsServer[0]], stdout=self.subprocess.PIPE,stderr=self.subprocess.STDOUT)
+                        process = self.subprocess.Popen(["host", hostname[0] + domainPostfix, dnsServer[0]],
+                                                        stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
                         resultFull = self.stripUnicode(process.communicate()[0])
                         try:
                             result = self.grep(resultFull, ' has address ')
-                            resulthostname = self.grep(result, hostname[0]).split(' has address ')[0]
                             resultIP = self.grep(result, hostname[0]).split(' has address ')[1]
                         except IndexError:
                             continue
-                        self.storeFinding(resultIP, 0, 0, 'Host in DNS Checker', 'DNS Server ' + dnsServer[0] + ' reports: \n' + result)
+                        self.storeFinding(resultIP, 0, 0, 'Host in DNS Checker',
+                                          'DNS Server ' + dnsServer[0] + ' reports: \n' + result)
+
+    def checkRDNSForIP(self):
+        print("Checking for IP in rDNS")
+        hosts = self.databaseTransaction("SELECT host FROM hosts ORDER BY host")
+        dnsServers = self.databaseTransaction(
+            "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=53 AND openPorts.portType = 2 ORDER BY hosts.host")
+        if hosts and dnsServers:
+            for host in hosts:
+                for dnsServer in dnsServers:
+                    process = self.subprocess.Popen(["host", host[0], dnsServer[0]],
+                                                    stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
+                    resultFull = self.stripUnicode(process.communicate()[0])
+                    try:
+                        result = self.grep(resultFull, ' domain name pointer ')
+                    except IndexError:
+                        continue
+                    if result:
+                        self.storeFinding(host[0], 0, 0, 'IP in rDNS Checker',
+                                      'DNS Server ' + dnsServer[0] + ' reports: \n' + result)
+                        try:
+                            resultHostname = result.split(' domain name pointer ')[1].split('.')[0]
+                        except IndexError:
+                            try:
+                                resultHostname = result.split(' domain name pointer ')[1]
+                            except IndexError:
+                                continue
+                        if resultHostname:
+                            checkExistsResult = self.databaseTransaction(
+                                "SELECT DISTINCT hostname FROM hostnames WHERE hostname = ?",
+                                (str(resultHostname).lower(),))
+                            if not checkExistsResult:
+                                self.databaseTransaction('INSERT INTO hostnames (hostname) VALUES(?)',
+                                                         (str(resultHostname).lower(),))
+                        try:
+                            resultDomain = self.re.sub('\.$', '', result.split(' domain name pointer ')[1].split('.', 1)[1])
+                        except IndexError:
+                            try:
+                                resultDomain = result.split(' domain name pointer ')[1].split('.', 1)[1]
+                            except IndexError:
+                                continue
+                        if resultDomain:
+                            checkExistsResult = self.databaseTransaction(
+                                "SELECT DISTINCT domain FROM domains WHERE domain = ?", (str(resultDomain).lower(),))
+                            if not checkExistsResult:
+                                self.databaseTransaction('INSERT INTO domains (domain) VALUES(?)',
+                                                         (str(resultDomain).lower(),))
+                                self.databaseTransaction('INSERT INTO domains (domain) VALUES(?)',
+                                                         (str(resultDomain).lower() + '.local',))
+                                self.databaseTransaction('INSERT INTO domains (domain) VALUES(?)',
+                                                         (str(resultDomain).lower() + '.lan',))
 
     def checkSSHversion(self):
         print("Checking for SSH protocol versions in place")
         sshServers = self.databaseTransaction(
             "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=22 AND openPorts.portType = 1 ORDER BY hosts.host")
         for server in sshServers:
-            sshCheckProcess = self.subprocess.Popen(["ssh", "-vN", "-oBatchMode=yes", "-oStrictHostKeyChecking=no", "-oUserKnownHostsFile=/dev/null", server[0]], stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
+            sshCheckProcess = self.subprocess.Popen(
+                ["ssh", "-vN", "-oBatchMode=yes", "-oStrictHostKeyChecking=no", "-oUserKnownHostsFile=/dev/null",
+                 server[0]], stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
             sshCheckResultFull = self.stripUnicode(sshCheckProcess.communicate()[0])
             try:
-                sshCheckResult = self.grep(sshCheckResultFull, "remote software version").split("debug1: ")[1].split(", remote software version")[0]
+                sshCheckResult = self.grep(sshCheckResultFull, "remote software version").split("debug1: ")[1].split(
+                    ", remote software version")[0]
             except IndexError:
                 continue
             if not self.re.search('Remote protocol version 2.0', sshCheckResult):
@@ -684,13 +752,15 @@ class FastInitialRecon:
         for target in targets:
             self.executeMSFcommand(self.msfConsole, 'set RHOSTS ' + target[0] + '/32')
             snmpCheckResultFull = self.executeMSFcommand(self.msfConsole, 'run')
-            snmpCheckResult = self.grepv(self.grepv(snmpCheckResultFull['data'], 'Scanned 1 of 1 hosts'),'Auxiliary module execution completed')
+            snmpCheckResult = self.grepv(self.grepv(snmpCheckResultFull['data'], 'Scanned 1 of 1 hosts'),
+                                         'Auxiliary module execution completed')
             if snmpCheckResult:
                 self.storeFinding(target[0], 161, 2, 'SNMP Default Communities Checker', snmpCheckResult)
 
     def checkMSSQLDefaultCreds(self):
         print("MSSQL Default Creds Checker")
-        targets = self.databaseTransaction("SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=1433 AND openPorts.portType = 1 ORDER BY hosts.host")
+        targets = self.databaseTransaction(
+            "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=1433 AND openPorts.portType = 1 ORDER BY hosts.host")
         usernameResults = self.databaseTransaction("SELECT username FROM usernames ORDER BY username")
         passwordResults = self.databaseTransaction("SELECT password FROM passwords ORDER BY password")
         self.executeMSFcommand(self.msfConsole, 'use auxiliary/scanner/mssql/mssql_login')
@@ -702,50 +772,68 @@ class FastInitialRecon:
                     self.executeMSFcommand(self.msfConsole, 'set PASSWORD ' + password[0])
                     resultsFull = 'Attempt with ' + username[0] + " / " + password[0] + ' against ' + target[0] + '\n'
                     resultsFull = resultsFull + self.executeMSFcommand(self.msfConsole, 'run')
-                    results = self.grepv(self.grepv(resultsFull, 'Scanned 1 of 1 hosts'), 'Auxiliary module execution completed')
+                    results = self.grepv(self.grepv(resultsFull, 'Scanned 1 of 1 hosts'),
+                                         'Auxiliary module execution completed')
                     if results:
                         self.storeFinding(target[0], 1433, 1, 'MSSQL Default Creds Checker', results)
 
     def checkFingerUsers(self):
         print("Checking for finger service user enumeration")
         self.executeMSFcommand(self.msfConsole, 'use auxiliary/scanner/finger/finger_users')
-        targets = self.databaseTransaction("SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=79 AND openPorts.portType = 1 ORDER BY hosts.host")
+        targets = self.databaseTransaction(
+            "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=79 AND openPorts.portType = 1 ORDER BY hosts.host")
         for target in targets:
             self.executeMSFcommand(self.msfConsole, 'set RHOSTS ' + target[0] + '/32')
             resultsFull = 'Attempt against ' + target[0] + '\n'
             resultsFull = resultsFull + self.executeMSFcommand(self.msfConsole, 'run')
-            results = self.grepv(self.grepv(resultsFull,'Scanned 1 of 1 hosts'), 'Auxiliary module execution completed')
+            results = self.grepv(self.grepv(resultsFull, 'Scanned 1 of 1 hosts'),
+                                 'Auxiliary module execution completed')
             if results:
                 self.storeFinding(target[0], 79, 1, 'Finger user enum checker', results)
 
     def checkSMTPForDomains(self):
         print("Checking SMTP service for domain info leaks")
-        targets = self.databaseTransaction("SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=25 AND openPorts.portType = 1 ORDER BY hosts.host")
+        targets = self.databaseTransaction(
+            "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=25 AND openPorts.portType = 1 ORDER BY hosts.host")
         self.executeMSFcommand(self.msfConsole, 'use auxiliary/scanner/smtp/smtp_ntlm_domain')
         for target in targets:
             self.executeMSFcommand(self.msfConsole, 'set RHOSTS ' + target[0] + '/32')
             resultsFull = 'Attempt against ' + target[0] + '\n'
             resultsFull = resultsFull + self.executeMSFcommand(self.msfConsole, 'run')
-            results = self.grepv(self.grepv(resultsFull, 'Scanned 1 of 1 hosts'), 'Auxiliary module execution completed')
+            results = self.grepv(self.grepv(resultsFull, 'Scanned 1 of 1 hosts'),
+                                 'Auxiliary module execution completed')
             if results:
                 self.storeFinding(target[0], 25, 1, 'SMTP Domain Info Leak', results)
 
-    def SMTPUserEnum(self):
+    def checkSMTPUserEnum(self):
         print("Performing SMTP User Enumeration")
         usernameResults = self.databaseTransaction("SELECT username FROM usernames ORDER BY username")
-        targets = self.databaseTransaction("SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=25 AND openPorts.portType = 1 ORDER BY hosts.host")
+        targets = self.databaseTransaction(
+            "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=25 AND openPorts.portType = 1 ORDER BY hosts.host")
         for target in targets:
             for username in usernameResults:
                 resultsFull = 'Attempt against ' + target[0] + ' with user ' + username[0] + ' using the VRFY method\n'
-                process = self.subprocess.Popen(["smtp-user-enum", "-M", "VRFY", "-u", username[0], "-t", target[0]],stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
-                resultsFull = self.stripUnicode(process.communicate()[0])
-                resultsFiltered = self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(resultsFull, '------------------'), 'Scan Information'), 'Mode ..............'), 'Worker Processes ..'), 'Target count ......'), 'Username count ....'), 'Target TCP port ...'), 'Query timeout .....'), 'Target domain .....'), '######## Scan '), ' queries in '), '0 results.')
+                process = self.subprocess.Popen(["smtp-user-enum", "-M", "VRFY", "-u", username[0], "-t", target[0]],
+                                                stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
+                resultsFull = resultsFull + self.stripUnicode(process.communicate()[0])
+                resultsFiltered = self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(
+                    self.grepv(self.grepv(
+                        self.grepv(self.grepv(self.grepv(resultsFull, '------------------'), 'Scan Information'),
+                                   'Mode ..............'), 'Worker Processes ..'), 'Target count ......'),
+                    'Username count ....'), 'Target TCP port ...'), 'Query timeout .....'), 'Target domain .....'),
+                    '######## Scan '), ' queries in '), '0 results.')
                 if resultsFiltered:
                     self.storeFinding(target[0], 25, 1, 'SMTP User Enumeration', resultsFiltered)
-
+                # ----------
                 resultsFull = 'Attempt against ' + target[0] + ' with user ' + username[0] + ' using the EXPN method\n'
-                process = self.subprocess.Popen(["smtp-user-enum", "-M", "EXPN", "-u", username[0], "-t", target[0]],stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
-                resultsFull = self.stripUnicode(process.communicate()[0])
-                resultsFiltered = self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(resultsFull, '------------------'), 'Scan Information'),'Mode ..............'), 'Worker Processes ..'), 'Target count ......'),'Username count ....'), 'Target TCP port ...'), 'Query timeout .....'), 'Target domain .....'),'######## Scan '), ' queries in '), '0 results.')
+                process = self.subprocess.Popen(["smtp-user-enum", "-M", "EXPN", "-u", username[0], "-t", target[0]],
+                                                stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
+                resultsFull = resultsFull + self.stripUnicode(process.communicate()[0])
+                resultsFiltered = self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(
+                    self.grepv(self.grepv(
+                        self.grepv(self.grepv(self.grepv(resultsFull, '------------------'), 'Scan Information'),
+                                   'Mode ..............'), 'Worker Processes ..'), 'Target count ......'),
+                    'Username count ....'), 'Target TCP port ...'), 'Query timeout .....'), 'Target domain .....'),
+                    '######## Scan '), ' queries in '), '0 results.')
                 if resultsFiltered:
                     self.storeFinding(target[0], 25, 1, 'SMTP User Enumeration', resultsFiltered)

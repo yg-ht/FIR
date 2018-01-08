@@ -7,6 +7,7 @@ This is a new project designed to automate early enumeration tasks.  Inspired by
  the following tasks:
  
  - A targeted TCP and UDP port scan
+ - Checks to see if IPs are in rDNS and extracts hostnames and domain names where possible
  - An NBT Scan()
  - Checks which SMB Version is available and pulls certain details
  - Attempts to enumerate users via RPC / SMB
@@ -20,6 +21,7 @@ This is a new project designed to automate early enumeration tasks.  Inspired by
  - Looks for default credentials on MSSQL servers
  - Attempts to enumerate user accounts on the Finger service
  - Checks to see if SMTP will leak AD Domain info
+ - Checks for SMTP enumeration of a given list of users
 
 This is at beta stages in its development - please report bugs (or better still, submit pull requests)
 
@@ -51,7 +53,6 @@ this manually, update the settings.py file with your credentials and run MSFRPCd
 
 To make this a minimum viable product for Fast Initial (noisey) Recon the following must be in place:
 
- - smtp enum of users
  - ftp anonymous login checking
  - ftp anonymous access rights
  - identify IIS / Apache versions (and associated exploitDB data)
