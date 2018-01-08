@@ -59,9 +59,9 @@ class FastInitialRecon:
         # / init MSF
 
         # init database
+        choice = ''
         if self.os.path.isfile(self.settings.dbFile):
             print ("Previous session detected.  Would you like to:\ndestroy it and start a (N)ew session, or (C)ontinue with the previous session?")
-            choice = ''
             while not (choice == 'C' or choice == 'N'):
                 choiceRaw = self.readchar.readkey()
                 choice = str(choiceRaw).upper()
