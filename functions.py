@@ -59,60 +59,21 @@ class FastInitialRecon:
         # / init MSF
 
         # init database
-        try:
-            self.os.remove(self.settings.dbFile)
-        except OSError:
-            pass
-        if self.settings.debug:
-            print ("Creating usernames table")
-        self.databaseTransaction("CREATE TABLE usernames (id INTEGER PRIMARY KEY, username TEXT)")
-        if self.settings.debug:
-            print ("Populating usernames table")
-        for username in self.referenceData['commonUsernames']:
-            self.databaseTransaction("INSERT INTO usernames (username) VALUES(?)", (str(username),))
-        if self.settings.debug:
-            print ("Creating passwords table")
-        self.databaseTransaction("CREATE TABLE passwords (id INTEGER PRIMARY KEY, password TEXT)")
-        if self.settings.debug:
-            print ("Populating passwords table")
-        for password in self.referenceData['commonPasswords']:
-            self.databaseTransaction("INSERT INTO passwords (password) VALUES(?)", (str(password),))
-        if self.settings.debug:
-            print ("Creating hostnames table")
-        self.databaseTransaction("CREATE TABLE hostnames (id INTEGER PRIMARY KEY, hostname TEXT)")
-        if self.settings.debug:
-            print ("Creating domains table")
-        self.databaseTransaction("CREATE TABLE domains (id INTEGER PRIMARY KEY, domain TEXT)")
-        if self.settings.debug:
-            print ("Creating hosts table")
-        self.databaseTransaction("CREATE TABLE hosts (id INTEGER PRIMARY KEY, host TEXT)")
-        if self.settings.debug:
-            print ("Creating openports table")
-        self.databaseTransaction(
-            "CREATE TABLE openPorts (id INTEGER PRIMARY KEY, hostID INTEGER, portNum INTEGER, portType INTEGER, FOREIGN KEY (hostID) REFERENCES hosts(id))")
-        if self.settings.debug:
-            print ("Creating findings table")
-        self.databaseTransaction(
-            "CREATE TABLE findings (id INTEGER PRIMARY KEY, openPortID INTEGER, dataSource TEXT, finding TEXT, FOREIGN KEY (openPortID) REFERENCES openPorts(id))")
-        if self.settings.debug:
-            print ("Populating initial details in hosts and openPorts tables")
-        hostsInsert = ''
-        for hostAddr in self.IPNetwork(self.targetNetwork):
-            hostsInsert = hostsInsert + '\n("' + str(hostAddr) + '"),'
-        hostsInsert = self.re.sub(',$', '', hostsInsert)
-        self.databaseTransaction("INSERT INTO hosts (host) VALUES" + hostsInsert)
-        openPortsInsert = ''
-        for index in range(1, len(self.IPNetwork(self.targetNetwork))):
-            openPortsInsert = openPortsInsert + '\n(' + str(index) + ', 0, 0),'
-        openPortsInsert = self.re.sub(',$', '', openPortsInsert)
-        self.databaseTransaction("INSERT INTO openPorts (hostID, portNum, portType) VALUES" + openPortsInsert)
-
+        if self.os.path.isfile(self.settings.dbFile):
+            print ("Previous session detected.  Would you like to:\ndestroy it and start a (N)ew session, or (C)ontinue with the previous session?")
+            choice = ''
+            while not (choice == 'C' or choice == 'N'):
+                choiceRaw = self.readchar.readkey()
+                choice = str(choiceRaw).upper()
+        if choice == 'N' or choice == '':
+            self.initDB()
+            self.portScan()
+            self.runDefaultTools()
         # / init database
 
         # ---- lets go ----#
-        self.portScan()
-        self.runDefaultTools()
         self.printMainMenu()
+
     # ---- Core functionality ----#
 
     def checkMSFRPCrunning(self):
@@ -403,6 +364,55 @@ class FastInitialRecon:
             "SELECT id FROM openPorts WHERE hostID=? AND portNum=? AND portType=?", (str(hostID), portNum, portType))
         if openPortIDResult:
             return openPortIDResult[0][0]
+
+    def initDB(self):
+        try:
+            self.os.remove(self.settings.dbFile)
+        except OSError:
+            pass
+        if self.settings.debug:
+            print ("Creating usernames table")
+        self.databaseTransaction("CREATE TABLE usernames (id INTEGER PRIMARY KEY, username TEXT)")
+        if self.settings.debug:
+            print ("Populating usernames table")
+        for username in self.referenceData['commonUsernames']:
+            self.databaseTransaction("INSERT INTO usernames (username) VALUES(?)", (str(username),))
+        if self.settings.debug:
+            print ("Creating passwords table")
+        self.databaseTransaction("CREATE TABLE passwords (id INTEGER PRIMARY KEY, password TEXT)")
+        if self.settings.debug:
+            print ("Populating passwords table")
+        for password in self.referenceData['commonPasswords']:
+            self.databaseTransaction("INSERT INTO passwords (password) VALUES(?)", (str(password),))
+        if self.settings.debug:
+            print ("Creating hostnames table")
+        self.databaseTransaction("CREATE TABLE hostnames (id INTEGER PRIMARY KEY, hostname TEXT)")
+        if self.settings.debug:
+            print ("Creating domains table")
+        self.databaseTransaction("CREATE TABLE domains (id INTEGER PRIMARY KEY, domain TEXT)")
+        if self.settings.debug:
+            print ("Creating hosts table")
+        self.databaseTransaction("CREATE TABLE hosts (id INTEGER PRIMARY KEY, host TEXT)")
+        if self.settings.debug:
+            print ("Creating openports table")
+        self.databaseTransaction(
+            "CREATE TABLE openPorts (id INTEGER PRIMARY KEY, hostID INTEGER, portNum INTEGER, portType INTEGER, FOREIGN KEY (hostID) REFERENCES hosts(id))")
+        if self.settings.debug:
+            print ("Creating findings table")
+        self.databaseTransaction(
+            "CREATE TABLE findings (id INTEGER PRIMARY KEY, openPortID INTEGER, dataSource TEXT, finding TEXT, FOREIGN KEY (openPortID) REFERENCES openPorts(id))")
+        if self.settings.debug:
+            print ("Populating initial details in hosts and openPorts tables")
+        hostsInsert = ''
+        for hostAddr in self.IPNetwork(self.targetNetwork):
+            hostsInsert = hostsInsert + '\n("' + str(hostAddr) + '"),'
+        hostsInsert = self.re.sub(',$', '', hostsInsert)
+        self.databaseTransaction("INSERT INTO hosts (host) VALUES" + hostsInsert)
+        openPortsInsert = ''
+        for index in range(1, len(self.IPNetwork(self.targetNetwork))):
+            openPortsInsert = openPortsInsert + '\n(' + str(index) + ', 0, 0),'
+        openPortsInsert = self.re.sub(',$', '', openPortsInsert)
+        self.databaseTransaction("INSERT INTO openPorts (hostID, portNum, portType) VALUES" + openPortsInsert)
 
     def storeFinding(self, hostIP, portNum, portType, dataSource, finding):
         openPortID = self.getOpenPortID(hostIP, portNum, portType)
