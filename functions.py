@@ -506,6 +506,8 @@ class FastInitialRecon:
 
     def portScan(self, allPorts=False):
         print("Running targeted portscan")
+        print("You may also want a full port scan with service detection, for example:")
+        print("   nmap -sV -sS --open -n -vvvv -T4 -Pn -p- -oA nmapTcpScan " + self.targetNetwork)
         if allPorts:
             for targetPort in range(1, 65535):
                 if self.settings.debug:
