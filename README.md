@@ -14,6 +14,7 @@ This is a new project designed to automate early enumeration tasks.  Inspired by
  - Looks for non-standard SMB file shares
  - Checks to see what access the anonymous user has to SMB file shares
  - Checks whether the target is vulnerable to MS08-067
+ - Checks whether the target is vulnerable to MS17-010
  - Checks which SSH protocol version is in place
  - Check for SNMP services with default community strings
  - Checks is discovered hostnames are in any known DNS servers to attempt to confirm AD Domain membership
