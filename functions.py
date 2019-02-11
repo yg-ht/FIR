@@ -647,6 +647,52 @@ class FastInitialRecon:
                                   msfFinding + " Use something like this in MSF:\n\nuse exploit/windows/smb/ms08_067_netapi\nset PAYLOAD windows/meterpreter/bind_tcp\nset RHOST " +
                                   host[0] + "\nexploit")
 
+    def checkMS08067(self):
+        print("Checking for MS08-067 vulnerable")
+        self.executeMSFcommand(self.msfConsole, 'use exploit/windows/smb/ms08_067_netapi')
+        targets = self.databaseTransaction(
+            "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=445 AND openPorts.portType = 1 ORDER BY hosts.host")
+        for host in targets:
+            self.executeMSFcommand(self.msfConsole, 'set RHOST ' + host[0])
+            msfFullResult = self.executeMSFcommand(self.msfConsole, 'check')
+            msfResult = self.grep(msfFullResult['data'], host[0])
+            if msfResult == '':
+                if self.settings.debug:
+                    print("Host didn't respond to scan, trying one last time")
+                msfFullResult = self.executeMSFcommand(self.msfConsole, 'check')
+                msfResult = self.grep(msfFullResult['data'], host[0])
+            try:
+                msfFinding = self.grepv(msfResult.split(":445 ")[1], 'The target is not exploitable')
+            except IndexError:
+                continue
+            if msfFinding:
+                self.storeFinding(host[0], 445, 1, "MS08-067 checker",
+                                  msfFinding + " Use something like this in MSF:\n\nuse exploit/windows/smb/ms08_067_netapi\nset PAYLOAD windows/meterpreter/bind_tcp\nset RHOST " +
+                                  host[0] + "\nexploit")
+
+    def checkMS17010(self):
+        print("Checking for MS17-010 vulnerable")
+        self.executeMSFcommand(self.msfConsole, 'use auxiliary/scanner/smb/smb_ms17_010')
+        targets = self.databaseTransaction(
+            "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=445 AND openPorts.portType = 1 ORDER BY hosts.host")
+        for host in targets:
+            self.executeMSFcommand(self.msfConsole, 'set RHOSTS ' + host[0] + '/32')
+            msfFullResult = self.executeMSFcommand(self.msfConsole, 'run')
+            msfResult = self.grep(msfFullResult['data'], host[0])
+            if msfResult == '':
+                if self.settings.debug:
+                    print("Host didn't respond to scan, trying one last time")
+                msfFullResult = self.executeMSFcommand(self.msfConsole, 'run')
+                msfResult = self.grep(msfFullResult['data'], host[0])
+            try:
+                msfFinding = self.grepv(msfResult.split(":445 ")[1], 'The target is not exploitable')
+            except IndexError:
+                continue
+            if msfFinding:
+                self.storeFinding(host[0], 445, 1, "MS17-010 checker",
+                                  msfFinding + " Use something like this in MSF:\n\nuse exploit/windows/smb/ms17_010_eternalblue\nset PAYLOAD windows/meterpreter/bind_tcp\nset RHOST " +
+                                  host[0] + "\nexploit")
+
     def checkDNSForAXFR(self):
         print ("Checking for AXFR on DNS servers")
         dnsServers = self.databaseTransaction(
@@ -655,7 +701,7 @@ class FastInitialRecon:
         if domainResults:
             for domain in domainResults:
                 for dnsServer in dnsServers:
-                    axfrProcess = self.subprocess.Popen(["dig", "+tries=1", "+time=1", "axfr", domain[0], '@' + dnsServer[0]],
+                    axfrProcess = self.subprocess.Popen(["dig", "+tries=" + dnsTimeoutSeconds, "+time=" + dnsTimeoutSeconds, "axfr", domain[0], '@' + dnsServer[0]],
                                                         stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
                     axfrResult = self.stripUnicode(axfrProcess.communicate()[0])
                     if self.grep(axfrResult, ';; Query time:'):
@@ -677,7 +723,7 @@ class FastInitialRecon:
                     domainPostfix = ''
                 for hostname in hostnameResults:
                     for dnsServer in dnsServers:
-                        process = self.subprocess.Popen(["host", hostname[0] + domainPostfix, dnsServer[0]],
+                        process = self.subprocess.Popen(["host", "-W " + dnsTimeoutSeconds, hostname[0] + domainPostfix, dnsServer[0]],
                                                         stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
                         resultFull = self.stripUnicode(process.communicate()[0])
                         try:
@@ -696,7 +742,7 @@ class FastInitialRecon:
         if hosts and dnsServers:
             for host in hosts:
                 for dnsServer in dnsServers:
-                    process = self.subprocess.Popen(["host", host[0], dnsServer[0]],
+                    process = self.subprocess.Popen(["host", "-W " + dnsTimeoutSeconds, host[0], dnsServer[0]],
                                                     stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
                     resultFull = self.stripUnicode(process.communicate()[0])
                     try:
