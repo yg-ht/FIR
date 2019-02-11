@@ -655,7 +655,7 @@ class FastInitialRecon:
         if domainResults:
             for domain in domainResults:
                 for dnsServer in dnsServers:
-                    axfrProcess = self.subprocess.Popen(["dig", "axfr", domain[0], '@' + dnsServer[0]],
+                    axfrProcess = self.subprocess.Popen(["dig", "+tries=1", "+time=1", "axfr", domain[0], '@' + dnsServer[0]],
                                                         stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
                     axfrResult = self.stripUnicode(axfrProcess.communicate()[0])
                     if self.grep(axfrResult, ';; Query time:'):
