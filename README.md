@@ -40,7 +40,7 @@ On ubuntu-based distributions (including Kali) you can use:
 
     apt update
     apt upgrade -y
-    apt install python-netaddr python-nmap python-texttable python-psutil
+    apt install python3-netaddr python3-nmap python3-texttable python3-psutil
     pip install readchar
 
 You will also need to have Metasploit in good working order as this script takes advantage of the MSFRPCd.

@@ -1,6 +1,6 @@
+# noinspection SqlResolve
 class FastInitialRecon:
     # python modules
-    import settings
     import os
     import sys
     import nmap
@@ -15,10 +15,11 @@ class FastInitialRecon:
     from sqlite3 import Error
     from netaddr import IPNetwork
     from time import sleep
+    import threading
 
     # custom modules
     import definitions
-    import threading
+    import settings
 
     def __init__(self, targetNetwork):
         # init general stuff (data definitions, and other things)
@@ -185,7 +186,7 @@ class FastInitialRecon:
                 self.menuActions[choice]()
                 self.menuActions['main_menu']()
             except KeyError:
-                print "Invalid selection, please try again.\n"
+                print("Invalid selection, please try again.\n")
                 self.menuActions['main_menu']()
 
     def printCurrentData(self):
@@ -241,7 +242,7 @@ class FastInitialRecon:
         print(discoveredOpenPortsTable.draw() + "\n")
 
     def printDetailsFollowingSearch(self):
-        searchCriteria = raw_input("Specify search criteria: ")
+        searchCriteria = input("Specify search criteria: ")
         targets = self.databaseTransaction(
             "SELECT DISTINCT hosts.host FROM hosts, openPorts, findings WHERE hosts.id = openPorts.hostID AND openPorts.id = findings.OpenPortID AND LOWER(findings.finding) LIKE '%" + searchCriteria.lower() + "%'")
         print(targets)
@@ -254,7 +255,7 @@ class FastInitialRecon:
                 continue
 
     def printDetailsOfTarget(self):
-        target = raw_input("Specify target by IP: ")
+        target = input("Specify target by IP: ")
         self.printDiscoveredOpenPorts(target)
         self.printFindings(target)
 
@@ -309,28 +310,28 @@ class FastInitialRecon:
     def addDomain(self):
         print ("Add domain")
         print ("Either add a single record and press enter, or, separate multiple records with commas (no spaces)")
-        domains = raw_input("Domain(s): ")
+        domains = input("Domain(s): ")
         for domain in domains.split(","):
             self.databaseTransaction("INSERT INTO domains (domain) VALUES(?)", (str(domain),))
 
     def addHostname(self):
         print ("Add hostname")
         print ("Either add a single record and press enter, or, separate multiple records with commas (no spaces)")
-        hostnames = raw_input("Hostname(s): ")
+        hostnames = input("Hostname(s): ")
         for hostname in hostnames.split(","):
             self.databaseTransaction("INSERT INTO hostnames (hostname) VALUES(?)", (str(hostname),))
 
     def addUsername(self):
         print ("Add username")
         print ("Either add a single record and press enter, or, separate multiple records with commas (no spaces)")
-        usernames = raw_input("Username(s): ")
+        usernames = input("Username(s): ")
         for username in usernames.split(","):
             self.databaseTransaction("INSERT INTO usernames (username) VALUES(?)", (str(username),))
 
     def addPassword(self):
         print ("Add password")
         print ("Either add a single record and press enter, or, separate multiple records with commas (no spaces)")
-        passwords = raw_input("Password(s): ")
+        passwords = input("Password(s): ")
         for password in passwords.split(","):
             self.databaseTransaction("INSERT INTO passwords (password) VALUES(?)", (str(password),))
 
@@ -674,7 +675,7 @@ class FastInitialRecon:
         if domainResults:
             for domain in domainResults:
                 for dnsServer in dnsServers:
-                    axfrProcess = self.subprocess.Popen(["dig", "+tries=" + dnsTimeoutSeconds, "+time=" + dnsTimeoutSeconds, "axfr", domain[0], '@' + dnsServer[0]],
+                    axfrProcess = self.subprocess.Popen(["dig", "+tries=" + self.settings.dnsTimeoutSeconds, "+time=" + self.settings.dnsTimeoutSeconds, "axfr", domain[0], '@' + dnsServer[0]],
                                                         stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
                     axfrResult = self.stripUnicode(axfrProcess.communicate()[0])
                     if self.grep(axfrResult, ';; Query time:'):
@@ -696,7 +697,7 @@ class FastInitialRecon:
                     domainPostfix = ''
                 for hostname in hostnameResults:
                     for dnsServer in dnsServers:
-                        process = self.subprocess.Popen(["host", "-W " + dnsTimeoutSeconds, hostname[0] + domainPostfix, dnsServer[0]],
+                        process = self.subprocess.Popen(["host", "-W " + self.settings.dnsTimeoutSeconds, hostname[0] + domainPostfix, dnsServer[0]],
                                                         stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
                         resultFull = self.stripUnicode(process.communicate()[0])
                         try:
@@ -715,7 +716,7 @@ class FastInitialRecon:
         if hosts and dnsServers:
             for host in hosts:
                 for dnsServer in dnsServers:
-                    process = self.subprocess.Popen(["host", "-W " + dnsTimeoutSeconds, host[0], dnsServer[0]],
+                    process = self.subprocess.Popen(["host", "-W " + self.settings.dnsTimeoutSeconds, host[0], dnsServer[0]],
                                                     stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
                     resultFull = self.stripUnicode(process.communicate()[0])
                     try:
