@@ -1,6 +1,8 @@
 # FIR
 ## Fast Initial Recon
 
+This tool is ropey as sin.  I suggest you don't use it and find a better way.  The latest set of fixes were put in place as a stop gap to make it work for a particular purpose.  YMMV
+
 This is a new project designed to automate early enumeration tasks.  Inspired by, amongst other things, Sparta
  (https://github.com/SECFORCE/sparta).  It is designed for time-constrained penetration tests, needless to say, this
  isn't exactly subtle - so I wouldn't use it if you are trying to stay under the radar.  It currently performs
@@ -38,10 +40,12 @@ This project is written for Python2.7, so make sure you have the below dependenc
 
 On ubuntu-based distributions (including Kali) you can use:
 
-    apt update
-    apt upgrade -y
-    apt install python3-netaddr python3-nmap python3-texttable python3-psutil
-    pip install readchar
+    sudo apt update
+    sudo apt upgrade -y
+    sudo apt install python3-netaddr python3-nmap python3-texttable python3-psutil
+    sudo pip install readchar
+    git clne https://github.com/DanMcInerney/msfrpc.git /opt && cd /opt/msfrpc && sudo python3 setup.py install
+    sudo sed -i  "s/r = requests.post(url, data=payload, headers=self.headers)/r = requests.post(url, data=payload, headers=self.headers, verify=False)/g" /usr/local/lib/python3.10/dist-packages/msfrpc.py
 
 You will also need to have Metasploit in good working order as this script takes advantage of the MSFRPCd.
 

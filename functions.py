@@ -34,6 +34,7 @@ class FastInitialRecon:
         # / init general stuff
 
         # init MSF
+        '''
         if self.settings.debug:
             print("Checking MSFRPC")
         if not self.checkMSFRPCrunning():
@@ -50,13 +51,14 @@ class FastInitialRecon:
             print("MSFRPC was found running")
         if self.settings.debug:
             print ("Connecting to MSFRPC")
-        self.msfClient = self.msfrpc.MsfRpcClient(self.settings.msfrpcPass, username=self.settings.msfrpcUser)
+        self.msfClient = self.msfrpc.Msfrpc({"port":55553, "ssl":True})
         if self.settings.debug:
-            print ("Establishing MSFRPC Console")
-        self.msfConsole = self.msfrpc.MsfConsole(self.msfClient)
+            print ("logging in to MSFRPC")
+        self.msfClient.login(self.settings.msfrpcUser, self.settings.msfrpcPass)
         if self.settings.debug:
             print ("Setting color to off in MSFRPC for cleaner output")
-        self.executeMSFcommand(self.msfConsole, 'color false')
+        self.executeMSFcommand(self.msfClient, 'color false')
+        '''
         # / init MSF
 
         # init database
@@ -102,40 +104,78 @@ class FastInitialRecon:
         except self.sqlite3.Error as e:
             print(e)
 
-    def executeMSFcommand(self, msfConsole, msfCommand, printOutput=False):
-        msfConsole.write(msfCommand)
-        msfReady = False
-        msfResult = False
-        while not msfReady:
-            msfResult = msfConsole.read()
-            if not msfResult['busy']:
-                msfReady = True
-        if printOutput:
-            print(self.stripUnicode(msfResult['data']))
-            print(self.stripUnicode(msfResult['prompt']))
-        else:
+    def executeMSFcommand(self, msfClient, msfCommand, printOutput=True):
+        msfResult = msfClient.call(msfCommand)
+        if msfResult != '':
+            if printOutput:
+                print(self.stripUnicode(msfResult))
+                #print(self.stripUnicode(msfResult['prompt']))
             return msfResult
+        else:
+            return False
 
     def stripUnicode(self, data):
         return filter(lambda x: x in self.string.printable, data)
 
-    def grep(self, haystack, needle):
-        lines = ''
-        for line in str.splitlines(haystack):
-            if self.re.search(needle, line, self.re.IGNORECASE):
-                lines = lines + line + "\n"
-        if lines:
-            lines = self.re.sub("\n$", '', lines)
-        return lines
+    def grep(self, haystack_raw, needle_raw):
+        try:
+            haystack = str(haystack_raw)
+            needle = str(needle_raw)
+        except:
+            pass
+        if isinstance(haystack, str) and isinstance(needle, str):
+#            if self.settings.debug:
+#                print('grep - haystack len type: ' + str(type(len(haystack))))
+#                print('grep - needle len type: ' + str(type(len(needle))))
+            if len(haystack) > 0:
+                if len(needle) > 0:
+                    lines = ''
+                    try:
+                        for line in str.splitlines(haystack):
+                            if self.re.search(needle, line, self.re.IGNORECASE):
+                                lines = lines + line + "\n"
+                        if lines:
+                            lines = self.re.sub("\n$", '', lines)
+    #                    if self.settings.debug:
+    #                        print('grep result: ' + lines)
+                        return lines
+                    except TypeError as e:
+                        return False
+                        pass
+            else:
+                return None
+        else:
+            return False
 
-    def grepv(self, haystack, needle):
-        lines = ''
-        for line in str.splitlines(haystack):
-            if not self.re.search(needle, line, self.re.IGNORECASE):
-                lines = lines + line + "\n"
-        if lines:
-            lines = self.re.sub("\n$", '', lines)
-        return lines
+    def grepv(self, haystack_raw, needle_raw):
+        try:
+            haystack = str(haystack_raw)
+            needle = str(needle_raw)
+#            if self.settings.debug:
+#                print('grepv - haystack: ' + haystack)
+#                print('grepv - needle: ' + needle)
+        except:
+            pass
+        if isinstance(haystack, str) and isinstance(needle, str):
+            if len(haystack) > 0:
+                if len(needle) > 0:
+                    lines = ''
+                    try:
+                        for line in str.splitlines(haystack):
+                            if not self.re.search(needle, line, self.re.IGNORECASE):
+                                lines = lines + line + "\n"
+                        if lines:
+                            lines = self.re.sub("\n$", '', lines)
+        #                if self.settings.debug:
+        #                    print('grepv result: ' + lines)
+                        return lines
+                    except TypeError as e:
+                        return False
+                        pass
+            else:
+                return None
+        else:
+            return False
 
     def shutdown(self):
         print ('Quiting now...')
@@ -238,7 +278,7 @@ class FastInitialRecon:
                     discoveredOpenPortsTable.add_row(
                         [result[0], str(result[1]), 'UDP', self.referenceData['commonUDPPortAssignments'][result[1]]])
                 except IndexError:
-                    discoveredOpenPortsTable.add_row([result[0], str(result[1]), 'UDP', 'No regsitered purpose'])
+                    discoveredOpenPortsTable.add_row([result[0], str(result[1]), 'UDP', 'No registered purpose'])
         print(discoveredOpenPortsTable.draw() + "\n")
 
     def printDetailsFollowingSearch(self):
@@ -433,38 +473,46 @@ class FastInitialRecon:
         targets = self.databaseTransaction(
             "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND (openPorts.portNum=445 OR openPorts.portNum=139) AND openPorts.portType = 1 ORDER BY hosts.host")
         for host in targets:
-            smbSharesProcess = self.subprocess.Popen(["smbclient", "-N", "-L", host[0]], stdout=self.subprocess.PIPE,
-                                                     stderr=self.subprocess.STDOUT)
-            smbSharesScanResult = self.re.sub('\t', '', self.re.sub(' +', ' ', self.grep(
-                self.stripUnicode(smbSharesProcess.communicate()[0]), 'Disk')))
-            try:
-                smbSharesScanResultValue = smbSharesScanResult.split(' ')[0]
-                smbSharesScanResultType = smbSharesScanResult.split(' ')[1]
-            except IndexError:
-                continue
-            if smbSharesScanResultValue and smbSharesScanResultType:
-                self.storeFinding(host[0], 445, 1, 'SMB share discovery',
-                                  'Non-default share.\nNamed:\t' + smbSharesScanResultValue + '\nType:\t' + smbSharesScanResultType)
+            smbSharesProcessResult = self.subprocess.run(["smbclient", "-N", "-L", host[0]], capture_output=True).stdout.decode("utf-8")
+            #if self.settings.debug:
+            #    print('Full shares command output: ' + str(smbSharesProcessResult))
+            smbSharesOnlyDisks = self.grep(smbSharesProcessResult, 'Disk')
+            if smbSharesOnlyDisks:
+                if self.settings.verbose:
+                    print('SMB Shares detected are: ' + str(smbSharesOnlyDisks))
+                smbSharesScanResult = self.re.sub('\t', '', self.re.sub(' +', ' ', smbSharesOnlyDisks))
+                try:
+                    smbSharesScanResultValue = smbSharesScanResult.split(' ')[0]
+                    smbSharesScanResultType = smbSharesScanResult.split(' ')[1]
+                except IndexError:
+                    continue
+                if smbSharesScanResultValue and smbSharesScanResultType:
+                    self.storeFinding(host[0], 445, 1, 'SMB share discovery',
+                                      'Non-default share.\nNamed:\t' + smbSharesScanResultValue + '\nType:\t' + smbSharesScanResultType)
+            elif self.settings.verbose:
+                print('No interesting SMB Shares detected on: ' + str(host))
 
     def checkSMBshareAccess(self, username='', password=''):
-        print("SMB Share Unauthenticated Access scan")
+        print("SMB Share Access scan")
         targets = self.databaseTransaction(
             "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND (openPorts.portNum=445 OR openPorts.portNum=139) AND openPorts.portType = 1 ORDER BY hosts.host")
         for host in targets:
             if username and password:
-                smbSharesProcess = self.subprocess.Popen(["smbmap", "-H", host[0], "-U", username, "-P", password],
-                                                         stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
+                smbSharesProcess = self.subprocess.run(["smbmap", "-H", host[0], "-U", username, "-P", password], capture_output=True).stdout.decode("utf-8")
             elif username and not password:
-                smbSharesProcess = self.subprocess.Popen(["smbmap", "-H", host[0], "-U", username],
-                                                         stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
+                smbSharesProcess = self.subprocess.run(["smbmap", "-H", host[0], "-U", username], capture_output=True).stdout.decode("utf-8")
             else:
-                smbSharesProcess = self.subprocess.Popen(["smbmap", "-H", host[0]], stdout=self.subprocess.PIPE,
-                                                         stderr=self.subprocess.STDOUT)
-            smbSharesScanResult = self.re.sub("\n\t", "\n", self.re.sub("^\t", '', self.re.sub(' +', ' ', self.grepv(
-                self.grepv(self.grepv(self.stripUnicode(smbSharesProcess.communicate()[0]), host[0]),
-                           'Finding open SMB ports....'), '-----------'))))
-            self.storeFinding(host[0], 445, 1, 'SMB share access checker',
-                              'The following share accesses were found:\n' + smbSharesScanResult)
+                smbSharesProcess = self.subprocess.run(["smbmap", "-H", host[0]], capture_output=True).stdout.decode("utf-8")
+            if smbSharesProcess:
+#                if self.settings.debug:
+#                    print('Share access check ppre grepv: ' + str(smbSharesProcess))
+                smbSharesProcess_interestingLines = self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(smbSharesProcess, host[0]), 'Finding open SMB ports....'),'-----------'), 'Working on it...'), 'NO ACCESS'), '[!] Authentication error on')
+#                if self.settings.debug:
+#                    print('Share access check post grepv: ' + str(smbSharesProcess_interestingLines))
+                if smbSharesProcess_interestingLines:
+                    smbSharesScanResult = self.re.sub("\n\t", "\n", self.re.sub("^\t", '', self.re.sub(' +', ' ', smbSharesProcess_interestingLines)))
+                    self.storeFinding(host[0], 445, 1, 'SMB share access checker',
+                                      'The following share accesses were found:\n' + smbSharesScanResult)
 
     def nbtScan(self):
         print("NBTscan")
@@ -472,11 +520,9 @@ class FastInitialRecon:
             "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=139 AND openPorts.portType = 1 ORDER BY hosts.host"))
         for host in targets:
             findingText = ''
-            nbtProcess = self.subprocess.Popen(["nbtscan", "-v", "-s ~=~=~", host[0]], stdout=self.subprocess.PIPE,
-                                               stderr=self.subprocess.STDOUT)
-            nbtScanResult = self.stripUnicode(nbtProcess.communicate()[0])
+            nbtProcessResult = self.subprocess.run(["nbtscan", "-v", "-s ~=~=~", host[0]], capture_output=True).stdout.decode("utf-8")
             for code in self.referenceData['netbiosCodes']:
-                netbiosCodeResult = self.grep(nbtScanResult, code[0])
+                netbiosCodeResult = self.grep(nbtProcessResult, code[0])
                 if netbiosCodeResult:
                     if self.re.search('MAC', netbiosCodeResult):
                         netbiosValue = str.replace(netbiosCodeResult.upper(), code[0], code[1]).split("~=~=~")[2]
@@ -527,23 +573,23 @@ class FastInitialRecon:
     def runDefaultTools(self):
         print('Running default tools:')
         self.nbtScan()
-        self.checkRDNSForIP()
-        self.smbVersionScan()
-        self.smbUsersScan()
+        #self.smbVersionScan()
+        #self.smbUsersScan()
         self.checkSMBshares()
         self.checkSMBshareAccess()
-        self.checkMS08067()
         self.checkSSHversion()
-        self.checkSNMPForDefaultCommunities()
+        #self.checkSNMPForDefaultCommunities()
         self.checkDNSForHostname()
         self.checkDNSForAXFR()
+        self.checkRDNSForIP()
+        #self.checkMS08067()
 
     def singlePortScan_TCP(self, targetPort):
         nm = self.nmap.PortScanner()
         nm.scan(self.targetNetwork, targetPort, self.settings.nmapGenericSettingsTCP)
         for hostIP in nm.all_hosts():
-            if self.settings.debug:
-                print("TCP Port " + targetPort + " found open on host " + hostIP)
+ #           if self.settings.debug:
+ #               print("TCP Port " + targetPort + " found open on host " + hostIP)
             hostID = self.getHostID(hostIP)
             if self.getOpenPortID(hostIP, targetPort, 1):
                 if self.settings.debug:
@@ -553,11 +599,8 @@ class FastInitialRecon:
                                          (hostID, targetPort))
 
     def singlePortScan_UDP(self, targetPort):
-        process = self.subprocess.Popen(
-            ["nmap", "-oG", "-", "-p", targetPort, "--open", "-n", "-Pn", "-sU", "-T5", self.targetNetwork],
-            stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
-        resultsFull = self.stripUnicode(process.communicate()[0])
-        resultsFiltered = self.grep(resultsFull, targetPort + '/open/udp').splitlines()
+        results = self.subprocess.run(["nmap", "-oG", "-", "-p", targetPort, "--open", "-n", "-Pn", "-sU", "-T5", self.targetNetwork], capture_output=True).stdout.decode("utf-8")
+        resultsFiltered = self.grep(results, targetPort + '/open/udp').splitlines()
         for line in resultsFiltered:
             try:
                 hostIP = line.split(" ()")[0].split("Host: ")[1]
@@ -675,9 +718,9 @@ class FastInitialRecon:
         if domainResults:
             for domain in domainResults:
                 for dnsServer in dnsServers:
-                    axfrProcess = self.subprocess.Popen(["dig", "+tries=" + self.settings.dnsTimeoutSeconds, "+time=" + self.settings.dnsTimeoutSeconds, "axfr", domain[0], '@' + dnsServer[0]],
-                                                        stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
-                    axfrResult = self.stripUnicode(axfrProcess.communicate()[0])
+#                    if self.settings.debug:
+#                        print('Checking AXFR for ' + domain[0] + ' on ' + dnsServer[0])
+                    axfrResult = self.subprocess.run(["dig", "+tries=" + str(self.settings.dnsTimeoutSeconds), "+time=" + str(self.settings.dnsTimeoutSeconds), "axfr", domain[0], '@' + dnsServer[0]], capture_output=True).stdout.decode("utf-8")
                     if self.grep(axfrResult, ';; Query time:'):
                         self.storeFinding(dnsServer[0], 53, 2, 'AXFR Checker', axfrResult)
                         print (axfrResult)
@@ -695,17 +738,27 @@ class FastInitialRecon:
                     domainPostfix = "." + domain[0]
                 else:
                     domainPostfix = ''
+                dnsDenyList = []
                 for hostname in hostnameResults:
                     for dnsServer in dnsServers:
-                        process = self.subprocess.Popen(["host", "-W " + self.settings.dnsTimeoutSeconds, hostname[0] + domainPostfix, dnsServer[0]],
-                                                        stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
-                        resultFull = self.stripUnicode(process.communicate()[0])
+                        if self.settings.verbose:
+                            print('Checking for ' + hostname[0] + ' on server ' + dnsServer[0])
+                        if dnsServer[0] not in dnsDenyList:
+                            resultFull = self.subprocess.run(["host", "-W " + str(self.settings.dnsTimeoutSeconds), hostname[0] + domainPostfix, dnsServer[0]], capture_output=True).stdout.decode("utf-8")
+                        else:
+                            break
+#                        if self.settings.debug:
+#                            print ('DNS hostname check result: ' + resultFull)
+                        if 'no servers could be reached' in resultFull:
+                            dnsDenyList.append(dnsServer[0])
+                            break
                         try:
                             result = self.grep(resultFull, ' has address ')
                             resultIP = self.grep(result, hostname[0]).split(' has address ')[1]
-                        except IndexError:
+                        except (IndexError, AttributeError):
                             continue
-                        self.storeFinding(resultIP, 0, 0, 'Host in DNS Checker',
+                        if resultIP:
+                            self.storeFinding(resultIP, 0, 0, 'Host in DNS Checker',
                                           'DNS Server ' + dnsServer[0] + ' reports: \n' + result)
 
     def checkRDNSForIP(self):
@@ -716,9 +769,7 @@ class FastInitialRecon:
         if hosts and dnsServers:
             for host in hosts:
                 for dnsServer in dnsServers:
-                    process = self.subprocess.Popen(["host", "-W " + self.settings.dnsTimeoutSeconds, host[0], dnsServer[0]],
-                                                    stdout=self.subprocess.PIPE, stderr=self.subprocess.STDOUT)
-                    resultFull = self.stripUnicode(process.communicate()[0])
+                    resultFull = self.subprocess.run(["host", "-W " + str(self.settings.dnsTimeoutSeconds), host[0], dnsServer[0]], capture_output=True).stdout.decode("utf-8")
                     try:
                         result = self.grep(resultFull, ' domain name pointer ')
                     except IndexError:
