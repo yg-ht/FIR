@@ -6,16 +6,12 @@ class FastInitialRecon:
     import nmap
     import sqlite3
     import string
-    import msfrpc
     import psutil
     import re
     import subprocess
     import readchar
     from texttable import Texttable
-    from sqlite3 import Error
     from netaddr import IPNetwork
-    from time import sleep
-    import threading
 
     # custom modules
     import definitions
@@ -124,9 +120,9 @@ class FastInitialRecon:
         except:
             pass
         if isinstance(haystack, str) and isinstance(needle, str):
-#            if self.settings.debug:
-#                print('grep - haystack len type: ' + str(type(len(haystack))))
-#                print('grep - needle len type: ' + str(type(len(needle))))
+            if self.settings.debug:
+                print('grep - haystack len type: ' + str(type(len(haystack))))
+                print('grep - needle len type: ' + str(type(len(needle))))
             if len(haystack) > 0:
                 if len(needle) > 0:
                     lines = ''
@@ -136,8 +132,8 @@ class FastInitialRecon:
                                 lines = lines + line + "\n"
                         if lines:
                             lines = self.re.sub("\n$", '', lines)
-    #                    if self.settings.debug:
-    #                        print('grep result: ' + lines)
+                        if self.settings.debug:
+                            print('grep result: ' + lines)
                         return lines
                     except TypeError as e:
                         return False
@@ -151,9 +147,9 @@ class FastInitialRecon:
         try:
             haystack = str(haystack_raw)
             needle = str(needle_raw)
-#            if self.settings.debug:
-#                print('grepv - haystack: ' + haystack)
-#                print('grepv - needle: ' + needle)
+            if self.settings.debug:
+                print('grepv - haystack: ' + haystack)
+                print('grepv - needle: ' + needle)
         except:
             pass
         if isinstance(haystack, str) and isinstance(needle, str):
@@ -166,8 +162,8 @@ class FastInitialRecon:
                                 lines = lines + line + "\n"
                         if lines:
                             lines = self.re.sub("\n$", '', lines)
-        #                if self.settings.debug:
-        #                    print('grepv result: ' + lines)
+                        if self.settings.debug:
+                            print('grepv result: ' + lines)
                         return lines
                     except TypeError as e:
                         return False
@@ -197,12 +193,12 @@ class FastInitialRecon:
             '0Q': self.shutdown,
             '10': self.checkRDNSForIP,
             '11': self.nbtScan,
-#            '12': self.smbVersionScan,
+            '12': self.smbVersionScan,
             '13': self.checkDNSForAXFR,
             '14': self.checkDNSForHostname,
 #            '15': self.checkSNMPForDefaultCommunities,
 #            '16': self.checkMSSQLDefaultCreds,
-#            '17': self.checkFingerUsers,
+            '17': self.checkFingerUsers,
 #            '18': self.checkSMTPForDomains,
             '19': self.checkSMTPUserEnum,
             '1M': self.printMainMenu,
@@ -484,11 +480,11 @@ class FastInitialRecon:
             else:
                 smbSharesProcess = self.subprocess.run(["smbmap", "-H", host[0]], capture_output=True).stdout.decode("utf-8")
             if smbSharesProcess:
-#                if self.settings.debug:
-#                    print('Share access check ppre grepv: ' + str(smbSharesProcess))
+                if self.settings.debug:
+                    print('Share access check ppre grepv: ' + str(smbSharesProcess))
                 smbSharesProcess_interestingLines = self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(smbSharesProcess, host[0]), 'Finding open SMB ports....'),'-----------'), 'Working on it...'), '[!] Authentication error on')
-#                if self.settings.debug:
-#                    print('Share access check post grepv: ' + str(smbSharesProcess_interestingLines))
+                if self.settings.debug:
+                    print('Share access check post grepv: ' + str(smbSharesProcess_interestingLines))
                 if smbSharesProcess_interestingLines:
                     smbSharesScanResult = self.re.sub("\n\t", "\n", self.re.sub("^\t", '', self.re.sub(' +', ' ', smbSharesProcess_interestingLines))).strip()
                     if ('None' not in smbSharesScanResult) and (smbSharesScanResult):
@@ -553,24 +549,28 @@ class FastInitialRecon:
     def runDefaultTools(self):
         print('Running default tools:')
         self.nbtScan()
-        #self.smbVersionScan()
-        #self.smbUsersScan()
+        self.smbVersionScan()
         self.checkSMBshareAccess()
         self.checkSSHversion()
-        #self.checkSNMPForDefaultCommunities()
         self.checkDNSForHostname()
         self.checkDNSForAXFR()
         self.checkRDNSForIP()
         self.checkOStype()
         self.checkSMTPUserEnum()
+        self.checkFingerUsers()
+        self.checkMS17010Vuln()
+        '''
         #self.checkMS08067()
+        #self.smbUsersScan()
+        #self.checkSNMPForDefaultCommunities()
+        '''
 
     def singlePortScan_TCP(self, targetPort):
         nm = self.nmap.PortScanner()
         nm.scan(self.targetNetwork, targetPort, self.settings.nmapGenericSettingsTCP)
         for hostIP in nm.all_hosts():
- #           if self.settings.debug:
- #               print("TCP Port " + targetPort + " found open on host " + hostIP)
+            if self.settings.debug:
+                print("TCP Port " + targetPort + " found open on host " + hostIP)
             hostID = self.getHostID(hostIP)
             if self.getOpenPortID(hostIP, targetPort, 1):
                 if self.settings.debug:
@@ -581,8 +581,8 @@ class FastInitialRecon:
 
     def singlePortScan_UDP(self, targetPort):
         results = self.subprocess.run(["nmap", "-oG", "-", "-p", targetPort, "--open", "-n", "-Pn", "-sU", "-sV", "--version-intensity", "0", "-T5", self.targetNetwork], capture_output=True).stdout.decode("utf-8")
-#        if self.settings.debug:
-#            print('UDP port scan raw results: ' + results)
+        if self.settings.debug:
+            print('UDP port scan raw results: ' + results)
         if results:
             resultsFiltered = self.grep(results, targetPort + '/open/udp').splitlines()
             for line in resultsFiltered:
@@ -590,8 +590,8 @@ class FastInitialRecon:
                     hostIP = line.split(" ()")[0].split("Host: ")[1]
                 except IndexError:
                     continue
-#                if self.settings.debug:
-#                    print("UDP Port " + targetPort + " found open on host " + hostIP)
+                if self.settings.debug:
+                    print("UDP Port " + targetPort + " found open on host " + hostIP)
                 hostID = self.getHostID(hostIP)
                 if self.getOpenPortID(hostIP, targetPort, 2):
                     if self.settings.debug:
@@ -601,18 +601,20 @@ class FastInitialRecon:
                                              (hostID, targetPort))
 
     def checkOStype(self):
-        print('Attempting to enumerate Operating System on all discovered hosts')
+        print('Checking OS version on discovered hosts')
         targets = self.databaseTransaction(
             "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum!=0 ORDER BY hosts.host")
         for host in targets:
+            if self.settings.verbose:
+                print('OS version checking for: ' + host[0])
             results = self.subprocess.run(["nmap", "-oN", "-", "-O", "-T5", "-n", "-Pn", host[0]], capture_output=True).stdout.decode("utf-8")
-#            if self.settings.debug:
-#                print('OS version port scan raw results for IP ' + host[0] + ': ' + results)
+            if self.settings.debug:
+                print('OS version port scan raw results for IP ' + host[0] + ': ' + results)
             if results:
                 resultsFilteredGuess = self.grep(results, 'guess')
                 resultsFilteredRunning = self.grep(results, 'running')
-#                if self.settings.debug:
-#                    print('OS version detection filtered results: ' + resultsFilteredRunning + "\n" + resultsFilteredGuess)
+                if self.settings.debug:
+                    print('OS version detection filtered results: ' + resultsFilteredRunning + "\n" + resultsFilteredGuess)
                 if resultsFilteredGuess and resultsFilteredRunning:
                     resultsFiltered = resultsFilteredGuess + resultsFilteredRunning
                 elif resultsFilteredRunning:
@@ -633,8 +635,8 @@ class FastInitialRecon:
         if domainResults:
             for domain in domainResults:
                 for dnsServer in dnsServers:
-#                    if self.settings.debug:
-#                        print('Checking AXFR for ' + domain[0] + ' on ' + dnsServer[0])
+                    if self.settings.verbose:
+                        print('Checking AXFR for ' + domain[0] + ' on ' + dnsServer[0])
                     axfrResult = self.subprocess.run(["dig", "+tries=" + str(self.settings.dnsTimeoutSeconds), "+time=" + str(self.settings.dnsTimeoutSeconds), "axfr", domain[0], '@' + dnsServer[0]], capture_output=True).stdout.decode("utf-8")
                     if self.grep(axfrResult, ';; Query time:'):
                         self.storeFinding(dnsServer[0], 53, 2, 'AXFR Checker', axfrResult)
@@ -659,12 +661,13 @@ class FastInitialRecon:
                         if any(dnsServer[0] in denylistItem for denylistItem in dnsDenyList):
                             continue
                         else:
-#                            if self.settings.debug:
-#                                print('Checking for ' + hostname[0] + ' on server ' + dnsServer[0])
-#                                print('DNS deny list is: ' + str(*dnsDenyList))
+                            if self.settings.verbose:
+                                print('Checking for ' + hostname[0] + ' on server ' + dnsServer[0])
+                            if self.settings.debug:
+                                print('DNS deny list is: ' + str(*dnsDenyList))
                             resultFull = self.subprocess.run(["host", "-W " + str(self.settings.dnsTimeoutSeconds), hostname[0] + domainPostfix, dnsServer[0]], capture_output=True).stdout.decode("utf-8")
-    #                        if self.settings.debug:
-    #                            print ('DNS hostname check result: ' + resultFull)
+                            if self.settings.debug:
+                                print ('DNS hostname check result: ' + resultFull)
                             if 'no servers could be reached' in resultFull:
                                 print('DNS hostname checks, server timed out so adding to deny list: ' + dnsServer[0])
                                 dnsDenyList.append(dnsServer[0])
@@ -686,17 +689,15 @@ class FastInitialRecon:
         if hosts and dnsServers:
             dnsDenyList = []
             for host in hosts:
-#                if self.settings.debug:
-#                    print("Testing rDNS for: " + host[0])
                 for dnsServer in dnsServers:
-#                    if self.settings.debug:
-#                        print("Testing rDNS on: " + dnsServer[0])
+                    if self.settings.verbose:
+                        print("Testing rDNS for: " + host[0] + " on: " + dnsServer[0])
                     if any(dnsServer[0] in denylistItem for denylistItem in dnsDenyList):
                         continue
                     else:
                         resultFull = self.subprocess.run(["host", "-W " + str(self.settings.dnsTimeoutSeconds), host[0], dnsServer[0]], capture_output=True).stdout.decode("utf-8")
-#                        if self.settings.debug:
-#                            print ('rDNS raw results: ' + resultFull)
+                        if self.settings.debug:
+                            print ('rDNS raw results: ' + resultFull)
                         if 'connection timed out; no servers could be reached' in resultFull:
                             print('rDNS checks, server timed out so adding to deny list: ' + dnsServer[0])
                             dnsDenyList.append(dnsServer[0])
@@ -745,17 +746,17 @@ class FastInitialRecon:
         sshServers = self.databaseTransaction(
             "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=22 AND openPorts.portType = 1 ORDER BY hosts.host")
         for server in sshServers:
-#            if self.settings.debug:
-#                print('SSH being tested: ' + server[0])
+            if self.settings.verbose:
+                print('SSH being tested: ' + server[0])
             sshCheckResultFull = self.subprocess.run(
                 ["timeout", "1", "ssh", "-vN", "-oBatchMode=yes", "-oStrictHostKeyChecking=no", "-oUserKnownHostsFile=/dev/null", "-oConnectTimeout=1",
                  server[0]], capture_output=True).stderr.decode("utf-8")
-#            if self.settings.debug:
-#                print('SSH check results: ' + str(sshCheckResultFull))
+            if self.settings.debug:
+                print('SSH check results: ' + str(sshCheckResultFull))
             try:
                 sshCheckResult = self.grep(sshCheckResultFull, "remote software version").split("debug1: ")[1].split(", remote software version")[0]
-#                if self.settings.debug:
-#                    print('SSH check version discovered: ' + sshCheckResult)
+                if self.settings.debug:
+                    print('SSH check version discovered: ' + sshCheckResult)
             except IndexError:
                 continue
             if not self.re.search('Remote protocol version 2.0', sshCheckResult):
@@ -769,105 +770,88 @@ class FastInitialRecon:
         for target in targets:
             for username in usernameResults:
                 if username[0]:
-                    if self.settings.debug:
+                    if self.settings.verbose:
                         print('Enumerating ' + target[0] + ' with username: ' + username[0])
                     resultsHeader = 'Attempt against ' + target[0] + ' with user ' + username[0] + ' using the VRFY method\n'
                     resultsFull = self.subprocess.run(["smtp-user-enum", "-M", "VRFY", "-u", username[0], "-w", "1", "-t", target[0]], capture_output=True).stdout.decode("utf-8")
-    #                if self.settings.debug:
-    #                    print('SMTP enum VRFY raw results: ' + resultsFull)
-                    '''                
-                    resultsFiltered = self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(self.grepv(
-                        self.grepv(self.grepv(
-                            self.grepv(self.grepv(self.grepv(resultsFull, '------------------'), 'Scan Information'),
-                                       'Mode ..............'), 'Worker Processes ..'), 'Target count ......'),
-                        'Username count ....'), 'Target TCP port ...'), 'Query timeout .....'), 'Target domain .....'),
-                        '######## Scan '), ' queries in '), '0 results.')
-                    '''
+                    if self.settings.debug:
+                        print('SMTP enum VRFY raw results: ' + resultsFull)
                     resultsFiltered = self.grep(resultsFull, ' exists')
                     if resultsFiltered:
                         self.storeFinding(target[0], 25, 1, 'SMTP User Enumeration (VRFY)', resultsHeader + resultsFiltered, append=True)
                     # ----------
                     resultsHeader = 'Attempt against ' + target[0] + ' with user ' + username[0] + ' using the EXPN method\n'
                     resultsFull = self.subprocess.run(["smtp-user-enum", "-M", "EXPN", "-u", username[0], "-w", "1", "-t", target[0]], capture_output=True).stdout.decode("utf-8")
-#                    if self.settings.debug:
-#                        print('SMTP enum EXPN raw results: ' + resultsFull)
-                    resultsFiltered = self.grep(resultsFull, ' exists')
+                    if self.settings.debug:
+                        print('SMTP enum EXPN raw results: ' + resultsFull)
+                    resultsFiltered = self.grep(resultsFull, ' exists').strip()
                     if resultsFiltered:
                         self.storeFinding(target[0], 25, 1, 'SMTP User Enumeration (EXPN)', resultsHeader + resultsFiltered, append=True)
 
-'''
-    def checkMS08067(self):
-        print("Checking for MS08-067 vulnerable")
-        self.executeMSFcommand(self.msfConsole, 'use exploit/windows/smb/ms08_067_netapi')
+    def checkFingerUsers(self):
+        print("Checking for finger service user enumeration")
         targets = self.databaseTransaction(
-            "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=445 AND openPorts.portType = 1 ORDER BY hosts.host")
-        for host in targets:
-            self.executeMSFcommand(self.msfConsole, 'set RHOST ' + host[0])
-            msfFullResult = self.executeMSFcommand(self.msfConsole, 'check')
-            msfResult = self.grep(msfFullResult['data'], host[0])
-            if msfResult == '':
-                if self.settings.debug:
-                    print("Host didn't respond to scan, trying one last time")
-                msfFullResult = self.executeMSFcommand(self.msfConsole, 'check')
-                msfResult = self.grep(msfFullResult['data'], host[0])
-            try:
-                msfFinding = self.grepv(msfResult.split(":445 ")[1], 'The target is not exploitable')
-            except IndexError:
-                continue
-            if msfFinding:
-                self.storeFinding(host[0], 445, 1, "MS08-067 checker",
-                                  msfFinding + " Use something like this in MSF:\n\nuse exploit/windows/smb/ms08_067_netapi\nset PAYLOAD windows/meterpreter/bind_tcp\nset RHOST " +
-                                  host[0] + "\nexploit")
-'''
+            "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=79 AND openPorts.portType = 1 ORDER BY hosts.host")
+        for target in targets:
+            if self.settings.verbose:
+                print('Fingering: ' + target[0])
+            results = self.subprocess.run(["finger", "@" + target[0]],capture_output=True).stdout.decode("utf-8").strip()
+            if results:
+                self.storeFinding(target[0], 79, 1, 'Finger user enumeration', results)
 
-'''
-    def checkMS17010(self):
-        print("Checking for MS17-010 vulnerable")
-        self.executeMSFcommand(self.msfConsole, 'use auxiliary/scanner/smb/smb_ms17_010')
-        targets = self.databaseTransaction(
-            "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=445 AND openPorts.portType = 1 ORDER BY hosts.host")
-        for host in targets:
-            self.executeMSFcommand(self.msfConsole, 'set RHOSTS ' + host[0] + '/32')
-            msfFullResult = self.executeMSFcommand(self.msfConsole, 'run')
-            msfResult = self.grep(msfFullResult['data'], host[0])
-            if msfResult == '':
-                if self.settings.debug:
-                    print("Host didn't respond to scan, trying one last time")
-                msfFullResult = self.executeMSFcommand(self.msfConsole, 'run')
-                msfResult = self.grep(msfFullResult['data'], host[0])
-            try:
-                msfFinding = self.grepv(msfResult.split(":445 ")[1], 'The target is not exploitable')
-            except IndexError:
-                continue
-            if msfFinding:
-                self.storeFinding(host[0], 445, 1, "MS17-010 checker",
-                                  msfFinding + " Use something like this in MSF:\n\nuse exploit/windows/smb/ms17_010_eternalblue\nset PAYLOAD windows/meterpreter/bind_tcp\nset RHOST " +
-                                  host[0] + "\nexploit")
-'''
-
-'''
     def smbVersionScan(self):
-        print("SMB Version scan")
-        self.executeMSFcommand(self.msfConsole, 'use auxiliary/scanner/smb/smb_version')
+        print("SMB protocol version scan")
         targets = self.databaseTransaction(
-            "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND (openPorts.portNum=445 OR openPorts.portNum=139) AND openPorts.portType = 1 ORDER BY hosts.host")
-        for host in targets:
-            self.executeMSFcommand(self.msfConsole, 'set RHOSTS ' + host[0] + '/32')
-            msfFullResult = self.executeMSFcommand(self.msfConsole, 'run')
-            msfResult = self.grep(msfFullResult['data'], host[0])
-            if msfResult == '':
+            "SELECT DISTINCT hosts.host, openPorts.portNum FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND (openPorts.portNum=445 OR openPorts.portNum=139) AND openPorts.portType = 1 ORDER BY hosts.host")
+        for target in targets:
+            if self.settings.verbose:
+                print("Checking " + target[0] + " for SMB version on port " + str(target[1]))
+            results = self.subprocess.run(["nmap", "-oN", "-", "-script", "smb-protocols", "-T5", "-n", "-Pn", "-p", str(target[1]), target[0]], capture_output=True).stdout.decode("utf-8")
+            if results == '':
                 if self.settings.debug:
-                    print("Host didn't respond to scan, trying one last time")
-                msfFullResult = self.executeMSFcommand(self.msfConsole, 'run')
-                msfResult = self.grep(msfFullResult['data'], host[0])
+                    print("Host didn't respond to SMB enum scan")
             try:
-                portNum = int(msfResult.split("Host is running ")[0].split(":")[1].split(" ")[0])
-                msfFinding = msfResult.split("Host is running ")[1]
+                finding = self.grep(results, "^\|").strip()
             except IndexError:
                 continue
-            if msfFinding and portNum:
-                self.storeFinding(host[0], portNum, 1, "SMB Version Scan", msfFinding)
-'''
+            if finding:
+                self.storeFinding(target[0], target[1], 1, "SMB Version Scan", finding)
+
+    def checkMS17010Vuln(self):
+        print("Checking for MS17-010 vulnerable machines")
+        targets = self.databaseTransaction(
+            "SELECT DISTINCT hosts.host, openPorts.portNum FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND (openPorts.portNum=445 OR openPorts.portNum=139) AND openPorts.portType = 1 ORDER BY hosts.host")
+        for target in targets:
+            if self.settings.verbose:
+                print("Checking " + target[0] + " for MS17-010 on port " + str(target[1]))
+            results = self.subprocess.run(["nmap", "-oN", "-", "-script", "smb-vuln-ms17-010", "-T5", "-n", "-Pn", "-p", str(target[1]), target[0]], capture_output=True).stdout.decode("utf-8")
+            if results == '':
+                if self.settings.debug:
+                    print("Host didn't respond to MS17-010 scan")
+            try:
+                finding = self.grep(results, "^\|").strip()
+            except IndexError:
+                continue
+            if finding:
+                self.storeFinding(target[0], target[1], 1, "MS17-010 vuln scan", finding)
+
+    def checkMS08067(self):
+        print("Checking for MS08-067 vulnerable machines")
+        targets = self.databaseTransaction(
+            "SELECT DISTINCT hosts.host, openPorts.portNum FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND (openPorts.portNum=445 OR openPorts.portNum=139) AND openPorts.portType = 1 ORDER BY hosts.host")
+        for target in targets:
+            if self.settings.verbose:
+                print("Checking " + target[0] + " for MS08-067 on port " + str(target[1]))
+            results = self.subprocess.run(["msfconsole", "-q", "-x", "'use exploit/windows/smb/ms08_067_netapi; set RHOSTS " + target[0] + "'/32; check; exit'"], capture_output=True).stdout.decode("utf-8")
+            if results == '':
+                if self.settings.debug:
+                    print("Host didn't respond to MS08-067 scan")
+            try:
+                finding = self.grepv(self.grepv(self.grep(results, "^[+]]"), "Cannot reliably check exploitability"), "The target is not exploitable.").strip()
+            except IndexError:
+                continue
+            if finding:
+                self.storeFinding(target[0], target[1], 1, "MS08-067 vuln scan", finding)
 
 '''
     def smbUsersScan(self):
@@ -933,22 +917,6 @@ class FastInitialRecon:
                                          'Auxiliary module execution completed')
                     if results:
                         self.storeFinding(target[0], 1433, 1, 'MSSQL Default Creds Checker', results)
-'''
-
-'''
-    def checkFingerUsers(self):
-        print("Checking for finger service user enumeration")
-        self.executeMSFcommand(self.msfConsole, 'use auxiliary/scanner/finger/finger_users')
-        targets = self.databaseTransaction(
-            "SELECT DISTINCT hosts.host FROM hosts, openPorts WHERE hosts.id=openPorts.hostID AND openPorts.portNum=79 AND openPorts.portType = 1 ORDER BY hosts.host")
-        for target in targets:
-            self.executeMSFcommand(self.msfConsole, 'set RHOSTS ' + target[0] + '/32')
-            resultsFull = 'Attempt against ' + target[0] + '\n'
-            resultsFull = resultsFull + self.executeMSFcommand(self.msfConsole, 'run')
-            results = self.grepv(self.grepv(resultsFull, 'Scanned 1 of 1 hosts'),
-                                 'Auxiliary module execution completed')
-            if results:
-                self.storeFinding(target[0], 79, 1, 'Finger user enum checker', results)
 '''
 
 '''
