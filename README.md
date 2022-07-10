@@ -39,6 +39,10 @@ On ubuntu-based distributions (including Kali) you can use:
     sudo apt install -y python3-netaddr python3-nmap python3-texttable python3-psutil
     sudo apt install -y smtp-user-enum
     sudo pip install readchar
+    
+Consider installing the following Kali metapackage if you are going into a disconnected environment:
+
+    suco apt install -y kali-linux-everything
 
 You will also need to have Metasploit in good working order to take advantage of the hints provided if it discovers something interesting
 
